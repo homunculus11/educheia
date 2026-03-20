@@ -210,13 +210,13 @@ h4 {
   }
 
   .floating-card {
-    @apply absolute bottom-[22px] left-[-18px] z-[4] w-[240px] border border-border bg-slate-900/70 px-4 pb-[14px] pt-[14px] text-text-main shadow-[0_16px_32px_rgba(0,0,0,0.3)] backdrop-blur-xl;
+    @apply absolute bottom-[16px] left-[-42px] z-[4] w-[min(320px,calc(100vw-2rem))] border border-border bg-slate-900/70 px-4 pb-[10px] pt-[10px] text-text-main shadow-[0_16px_32px_rgba(0,0,0,0.3)] backdrop-blur-xl;
     border-radius: 18px 14px 16px 20px;
     transform: rotate(1.4deg);
   }
 
   .floating-top {
-    @apply mb-2 flex items-center justify-between;
+    @apply mb-1.5 flex items-center justify-between;
   }
 
   .floating-time {
@@ -228,11 +228,16 @@ h4 {
   }
 
   .floating-title {
-    @apply mb-[10px] mt-0 text-base font-bold text-text-main;
+    @apply mb-[7px] mt-0 text-[15px] font-bold text-text-main;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .floating-wave {
-    @apply mb-[10px] flex h-[26px] items-end gap-1;
+    @apply mb-[8px] flex h-[18px] items-end gap-1;
   }
 
   .floating-wave span {
@@ -260,11 +265,20 @@ h4 {
   }
 
   .floating-actions {
-    @apply flex items-center justify-between gap-[10px];
+    @apply flex items-center gap-2;
+  }
+
+  .floating-actions .btn-mini {
+    @apply shrink-0;
+    white-space: nowrap;
   }
 
   .floating-note {
-    @apply text-[13px] text-text-muted;
+    @apply min-w-0 flex-1 text-[12px] text-text-muted;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: right;
   }
 
   .section {
