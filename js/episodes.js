@@ -41,6 +41,7 @@ let queryFn = null;
 let serverTimestampFn = null;
 let updateDocFn = null;
 let firebaseReadyPromise = null;
+let mobileTrackRefreshRaf = 0;
 
 let lastFocusedElement = null;
 
@@ -207,14 +208,55 @@ const updateMobileTrackMarkerState = (activeIndex = 0) => {
         marker.classList.toggle('is-passed', index <= activeIndex);
         marker.classList.toggle('is-active', index === activeIndex);
     });
+};
 
+const updateMobileTrackProgress = () => {
+    if (!isMobileLayout()) return;
+    if (!horizontalTrack || !cards?.length) return;
+
+    const connector = horizontalTrack.querySelector('.episodes-track-progress');
     const fillTrack = document.getElementById('timeline-fill-track');
-    if (fillTrack) {
-        const denominator = Math.max(1, cards.length - 1);
-        const progress = (activeIndex / denominator) * 100;
-        fillTrack.style.height = `${progress}%`;
-        fillTrack.style.width = '';
+    if (!connector || !fillTrack) return;
+
+    const connectorRect = connector.getBoundingClientRect();
+    if (!Number.isFinite(connectorRect.height) || connectorRect.height <= 0) return;
+
+    // Use a viewport probe line slightly above center so progress reacts earlier while scrolling.
+    const probeY = window.innerHeight * 0.45;
+    const filledPx = Math.max(0, Math.min(connectorRect.height, probeY - connectorRect.top));
+    const fillPercent = (filledPx / connectorRect.height) * 100;
+    fillTrack.style.height = `${fillPercent}%`;
+    fillTrack.style.width = '';
+
+    let closestIndex = mobileActiveCardIndex;
+    let minDistance = Infinity;
+
+    cards.forEach((card, index) => {
+        const rect = card.getBoundingClientRect();
+        const centerY = rect.top + (rect.height / 2);
+        const distance = Math.abs(centerY - probeY);
+
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestIndex = index;
+        }
+    });
+
+    if (closestIndex !== mobileActiveCardIndex) {
+        mobileActiveCardIndex = closestIndex;
     }
+
+    updateMobileTrackMarkerState(mobileActiveCardIndex);
+};
+
+const scheduleMobileTrackRefresh = () => {
+    if (!isMobileLayout()) return;
+
+    cancelAnimationFrame(mobileTrackRefreshRaf);
+    mobileTrackRefreshRaf = requestAnimationFrame(() => {
+        renderMobileTrackMarkers();
+        updateMobileTrackProgress();
+    });
 };
 
 const setupMobileCardsObserver = () => {
@@ -253,6 +295,7 @@ const setupMobileCardsObserver = () => {
 
     mobileActiveCardIndex = 0;
     updateMobileTrackMarkerState(mobileActiveCardIndex);
+    updateMobileTrackProgress();
 };
 
 // Utils
@@ -496,6 +539,13 @@ const renderCards = () => {
                 openPlayer(ep);
             }
         });
+
+        const cardImage = card.querySelector('.card-image');
+        if (cardImage) {
+            cardImage.addEventListener('load', scheduleMobileTrackRefresh, { once: true });
+            cardImage.addEventListener('error', scheduleMobileTrackRefresh, { once: true });
+        }
+
         horizontalTrack.appendChild(card);
     });
 
@@ -504,6 +554,7 @@ const renderCards = () => {
     updateTrackProgressGeometry();
     renderMobileTrackMarkers();
     setupMobileCardsObserver();
+    updateMobileTrackProgress();
 };
 
 const setupScroll = () => {
@@ -521,6 +572,7 @@ const setupScroll = () => {
             updateTrackProgressGeometry();
             renderMobileTrackMarkers();
             updateScroll();
+            updateMobileTrackProgress();
         });
     }, { passive: true });
 
@@ -655,6 +707,7 @@ const handleSnap = () => {
 
 const updateScroll = () => {
     if (isMobileLayout()) {
+        updateMobileTrackProgress();
         return;
     }
     if (!scrollContainer || !horizontalTrack) return;

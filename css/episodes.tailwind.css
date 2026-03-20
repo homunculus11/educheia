@@ -66,7 +66,7 @@ body.player-open {
 
 /* Episode Card */
 .episode-card {
-    @apply relative flex-shrink-0 w-[92vw] md:w-[85vw] lg:w-[78vw] aspect-video 
+    @apply relative flex-shrink-0 w-[88vw] md:w-[78vw] lg:w-[70vw] aspect-video 
            bg-bg-card border border-border rounded-3xl overflow-hidden shadow-2xl 
            transition-all duration-500 ease-out transform;
     scroll-snap-align: center;
@@ -93,6 +93,8 @@ body.player-open {
 
 .card-image {
     @apply w-full h-full object-cover transition-transform duration-700;
+    /* Slight zoom trims thin dark edges present in some source thumbnails */
+    transform: scale(1.018);
 }
 
 .episode-card:hover .card-image {
@@ -507,7 +509,7 @@ body.player-open {
 /* ─── Skeleton Loading ─── */
 
 .skeleton-card {
-    @apply relative flex-shrink-0 w-[92vw] md:w-[85vw] lg:w-[78vw] aspect-video
+    @apply relative flex-shrink-0 w-[88vw] md:w-[78vw] lg:w-[70vw] aspect-video
            bg-bg-card border border-border rounded-3xl overflow-hidden;
 }
 
