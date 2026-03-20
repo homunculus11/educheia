@@ -900,15 +900,6 @@ getChannelStats()
 		const listeners = data.channel?.statistics?.subscriberCount ?? null;
 		const listenersElement = document.getElementById('nr-of-listeners');
 		deferMetricAnimation(listenersElement, listeners);
-
-		const floatingBadge = document.querySelector('.floating-badge');
-		if (floatingBadge) {
-			const parsedListeners = Number.parseInt(listeners, 10);
-			const formattedListeners = Number.isFinite(parsedListeners) ? formatCompactNumber(parsedListeners) : null;
-			floatingBadge.textContent = formattedListeners
-				? `Top 1 Edu podcast în MD · + ${formattedListeners} ascultări săptămânale`
-				: 'Top 1 Edu podcast în MD';
-		}
 	})
 	.catch((error) => {
 		console.warn('Error loading channel stats:', error);
@@ -947,12 +938,10 @@ getChannelStats()
 	if (!prefersReducedMotion) {
 		const heroImage = document.querySelector('.hero-image');
 		const floatingCard = document.querySelector('.floating-card');
-		const floatingBadge = document.querySelector('.floating-badge');
 
-		if (heroImage || floatingCard || floatingBadge) {
+		if (heroImage || floatingCard) {
 			if (heroImage) heroImage.style.willChange = 'translate';
 			if (floatingCard) floatingCard.style.willChange = 'translate';
-			if (floatingBadge) floatingBadge.style.willChange = 'translate';
 
 			let parallaxTicking = false;
 			window.addEventListener('scroll', () => {
@@ -962,7 +951,6 @@ getChannelStats()
 					const y = Math.min(window.scrollY, 800);
 					if (heroImage) heroImage.style.translate = `0 ${y * 0.08}px`;
 					if (floatingCard) floatingCard.style.translate = `0 ${y * -0.06}px`;
-					if (floatingBadge) floatingBadge.style.translate = `${y * 0.04}px ${y * -0.1}px`;
 					parallaxTicking = false;
 				});
 			}, { passive: true });

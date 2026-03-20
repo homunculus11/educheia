@@ -259,16 +259,6 @@ h4 {
     @apply text-[13px] text-text-muted;
   }
 
-  .floating-badge {
-    @apply absolute right-[-12px] top-[10px] z-[4] inline-flex items-center gap-2 bg-white/90 px-[14px] py-[10px] text-sm font-bold text-slate-900 shadow-[0_12px_26px_rgba(0,0,0,0.2)];
-    border-radius: 18px 24px 16px 22px;
-    transform: rotate(-2deg);
-  }
-
-  .badge-dot {
-    @apply h-[10px] w-[10px] rounded-full bg-success shadow-[0_0_0_6px_rgba(34,197,94,0.2)];
-  }
-
   .section {
     @apply relative mx-auto w-full max-w-[1200px] px-6 py-16;
   }
@@ -513,11 +503,6 @@ h4 {
       transform: none;
     }
 
-    .floating-badge {
-      @apply relative right-0 top-0 mt-[-14px] self-end;
-      transform: none;
-    }
-
     .hero-visual {
       @apply mx-auto;
       max-width: 340px;
@@ -579,11 +564,6 @@ h4 {
 
     .floating-card {
       @apply w-full max-w-none;
-      transform: none;
-    }
-
-    .floating-badge {
-      @apply self-center;
       transform: none;
     }
 
@@ -878,12 +858,6 @@ main {
   transform: rotate(0.65deg);
 }
 
-.floating-badge {
-  border-radius: var(--radius-control);
-  background: linear-gradient(124deg, #e8f2ff, #cee6f0);
-  color: #243553;
-}
-
 .section-header {
   margin-bottom: 2rem;
 }
@@ -1045,11 +1019,6 @@ main {
     border-radius: 18px;
   }
 
-  .floating-badge {
-    font-size: 12px;
-    padding: 7px 12px;
-  }
-
   .metric-card {
     border-radius: 16px;
   }
@@ -1114,11 +1083,6 @@ main {
 
   .metric-caption {
     display: none;
-  }
-
-  .floating-badge {
-    font-size: 11px;
-    padding: 6px 10px;
   }
 
   .guest-media {
