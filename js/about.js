@@ -18,6 +18,7 @@ const siteHeader = document.querySelector('.site-header');
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const prefersCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 const hasIntersectionObserver = 'IntersectionObserver' in window;
+const isDesktopNavView = window.matchMedia('(min-width: 901px)');
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -267,15 +268,19 @@ if (quoteBlock && !prefersReducedMotion) {
 }
 
 /* ── Jump nav active section ── */
-if (jumpLinks.length && hasIntersectionObserver) {
-	const sectionById = new Map();
-	jumpLinks.forEach((link) => {
-		const href = link.getAttribute('href') || '';
-		if (!href.startsWith('#')) return;
-		const id = href.slice(1);
-		const section = document.getElementById(id);
-		if (section) sectionById.set(id, section);
-	});
+let resolveCurrentJumpSection = () => {};
+
+if (jumpLinks.length) {
+	const sectionItems = jumpLinks
+		.map((link) => {
+			const href = link.getAttribute('href') || '';
+			if (!href.startsWith('#')) return null;
+			const id = href.slice(1);
+			const section = document.getElementById(id);
+			if (!section) return null;
+			return { id, section };
+		})
+		.filter(Boolean);
 
 	const setCurrentLink = (id) => {
 		jumpLinks.forEach((link) => {
@@ -289,31 +294,63 @@ if (jumpLinks.length && hasIntersectionObserver) {
 		});
 	};
 
-	if (sectionById.size) {
-		const observer = new IntersectionObserver(
-			(entries) => {
-				const visible = entries
-					.filter((entry) => entry.isIntersecting)
-					.sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-
-				if (visible.length) {
-					setCurrentLink(visible[0].target.id);
-				}
-			},
-			{ threshold: [0.2, 0.4, 0.6], rootMargin: '-12% 0px -55% 0px' },
-		);
-
-		sectionById.forEach((section) => observer.observe(section));
-
+	const clearCurrentLink = () => {
 		jumpLinks.forEach((link) => {
-			link.addEventListener('click', () => {
-				const href = link.getAttribute('href') || '';
-				if (href.startsWith('#')) setCurrentLink(href.slice(1));
-			});
+			link.classList.remove('is-current');
+			link.removeAttribute('aria-current');
+		});
+	};
+
+	resolveCurrentJumpSection = () => {
+		if (!sectionItems.length) return;
+
+		if (!isDesktopNavView.matches) {
+			clearCurrentLink();
+			return;
+		}
+
+		const headerHeight = siteHeader ? Math.max(64, Math.round(siteHeader.getBoundingClientRect().height)) : 88;
+		const probeY = headerHeight + 120;
+
+		let current = sectionItems[0];
+		let foundPassedSection = false;
+
+		sectionItems.forEach((item) => {
+			const rect = item.section.getBoundingClientRect();
+			if (rect.top <= probeY) {
+				current = item;
+				foundPassedSection = true;
+			}
 		});
 
-		setCurrentLink('host');
+		if (!foundPassedSection) {
+			const nearestUpcoming = sectionItems
+				.map((item) => ({ item, top: item.section.getBoundingClientRect().top }))
+				.filter((entry) => entry.top > probeY)
+				.sort((a, b) => a.top - b.top)[0];
+
+			if (nearestUpcoming) {
+				current = nearestUpcoming.item;
+			}
+		}
+
+		setCurrentLink(current.id);
+	};
+
+	jumpLinks.forEach((link) => {
+		link.addEventListener('click', () => {
+			const href = link.getAttribute('href') || '';
+			if (!href.startsWith('#')) return;
+			if (!isDesktopNavView.matches) return;
+			setCurrentLink(href.slice(1));
+		});
+	});
+
+	if (typeof isDesktopNavView.addEventListener === 'function') {
+		isDesktopNavView.addEventListener('change', () => resolveCurrentJumpSection());
 	}
+
+	resolveCurrentJumpSection();
 }
 
 /* ── Scroll-frame loop ── */
@@ -321,6 +358,7 @@ function onScrollFrame() {
 	updateReadingProgress();
 	updateParallax();
 	updateTimeline();
+	resolveCurrentJumpSection();
 }
 
 let rafLocked = false;
