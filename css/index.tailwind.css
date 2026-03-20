@@ -77,11 +77,11 @@ h4 {
   }
 
   .quote-carousel {
-    @apply relative mt-1 min-h-24;
+    @apply relative mt-1 min-h-[120px];
   }
 
   .quote-slide {
-    @apply absolute inset-0 m-0 flex h-full flex-col border border-border bg-slate-900/60 px-4 pb-[14px] pt-[14px] opacity-0 shadow-[0_12px_26px_rgba(0,0,0,0.24)] animate-quote-cycle;
+    @apply absolute inset-0 m-0 flex h-full flex-col justify-between overflow-hidden border border-border bg-slate-900/60 px-4 pb-[14px] pt-[14px] opacity-0 shadow-[0_12px_26px_rgba(0,0,0,0.24)] animate-quote-cycle;
     border-radius: 16px 18px 14px 20px;
     transform: translateY(8px);
   }
@@ -95,11 +95,19 @@ h4 {
   }
 
   .quote-slide blockquote {
-    @apply mb-[6px] mt-0 text-base font-semibold text-text-main;
+    @apply mb-0 mt-0 text-base font-semibold text-text-main;
+    line-height: 1.45;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .quote-slide figcaption {
-    @apply mt-auto pt-2 text-[13px] text-text-muted;
+    @apply mt-2 pt-0 text-[13px] text-text-muted;
+    flex-shrink: 0;
   }
 
   .hero-ctas {
