@@ -6,6 +6,10 @@ body {
 		linear-gradient(180deg, #0f1524 0%, #0d1320 100%);
 }
 
+:root {
+	--about-sticky-offset: 102px;
+}
+
 h1,
 h2,
 h3,
@@ -31,6 +35,7 @@ h4 {
 
 .about-section {
 	@apply relative py-20;
+	scroll-margin-top: calc(var(--about-sticky-offset) + 86px);
 }
 
 /* ── Hero ── */
@@ -71,8 +76,12 @@ h4 {
 	@apply mt-5 max-w-[68ch] text-[1.06rem] text-[#d0def2];
 }
 
+.hero-lead + .hero-lead {
+	@apply mt-3;
+}
+
 .hero-quick-grid {
-	@apply mt-8 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4;
+	@apply mt-8 flex flex-wrap justify-center gap-4;
 }
 
 .quick-card {
@@ -80,6 +89,8 @@ h4 {
 	border-radius: 20px;
 	transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
 	will-change: transform;
+	flex: 0 1 320px;
+	width: min(360px, 100%);
 }
 
 .card-icon {
@@ -112,6 +123,41 @@ h4 {
 	@apply h-4 w-4;
 }
 
+.about-sticky-nav-wrap {
+	@apply sticky z-[18] pb-2;
+	top: var(--about-sticky-offset);
+}
+
+.about-jump-nav {
+	@apply flex flex-wrap items-center gap-2;
+	padding: 10px;
+	border-radius: 16px;
+	border: 1px solid rgba(143, 179, 224, 0.28);
+	background: linear-gradient(160deg, rgba(21, 33, 53, 0.82), rgba(15, 25, 42, 0.9));
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+	backdrop-filter: blur(12px);
+}
+
+.about-jump-link {
+	@apply inline-flex min-h-[42px] flex-[1_1_132px] items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold no-underline;
+	border-color: rgba(142, 183, 218, 0.32);
+	background: rgba(24, 40, 67, 0.6);
+	color: #d6e5fb;
+	transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.about-jump-link:hover,
+.about-jump-link.is-current {
+	border-color: rgba(144, 211, 223, 0.9);
+	background: rgba(109, 186, 198, 0.2);
+	color: #f3f8ff;
+	box-shadow: 0 0 0 2px rgba(143, 214, 223, 0.16);
+}
+
+.jump-label {
+	@apply leading-none;
+}
+
 /* ── Split layout ── */
 .split {
 	@apply grid grid-cols-[minmax(0,1fr)_minmax(240px,1fr)] items-start gap-[clamp(24px,5vw,60px)];
@@ -136,7 +182,7 @@ h4 {
 }
 
 .split-copy p {
-	@apply mt-4 text-[#c4d3e8];
+	@apply mt-4 max-w-[70ch] text-[#c4d3e8];
 }
 
 /* ── Host section ── */
@@ -149,20 +195,28 @@ h4 {
 }
 
 .host-photo-wrap {
-	@apply relative overflow-hidden;
-	border-radius: 28px;
-	transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-	will-change: transform;
+	@apply relative z-[1] w-[min(480px,100%)] overflow-hidden border border-border shadow-[0_24px_60px_rgba(0,0,0,0.28)];
+	aspect-ratio: 4 / 5;
+	border-radius: 28px 22px 32px 24px;
+	background: linear-gradient(145deg, rgba(88, 199, 214, 0.18), rgba(15, 23, 42, 0.4));
+	transform: rotate(-1.2deg);
 }
 
 .host-photo {
-	@apply block h-auto w-full max-w-[380px] object-cover;
-	border-radius: 28px;
+	@apply relative z-[1] block h-full w-full object-cover object-top;
+	filter: saturate(1.05) contrast(1.02);
+}
+
+.host-photo-ring {
+	@apply pointer-events-none absolute inset-4 z-[2] border border-dashed border-white/20;
+	border-radius: 20px 16px 24px 18px;
 }
 
 .host-photo-glow {
-	@apply pointer-events-none absolute -bottom-6 left-1/2 h-28 w-[80%] -translate-x-1/2 rounded-full blur-3xl;
-	background: radial-gradient(circle, rgba(109, 186, 198, 0.35) 0%, transparent 70%);
+	@apply pointer-events-none absolute inset-0 z-0;
+	background: radial-gradient(circle at 30% 20%, rgba(88, 199, 214, 0.24), transparent 36%),
+		radial-gradient(circle at 80% 40%, rgba(62, 180, 195, 0.16), transparent 30%);
+	filter: blur(16px);
 }
 
 .host-links {
@@ -171,6 +225,7 @@ h4 {
 
 .host-social {
 	@apply inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-[#c8dbf0] no-underline transition-all duration-200;
+	white-space: nowrap;
 }
 
 .host-social:hover {
@@ -196,10 +251,28 @@ h4 {
 }
 
 .story-panel li {
-	@apply relative pl-5 text-sm text-[#cad8ee];
+	@apply relative pl-5 text-sm leading-[1.6] text-[#cad8ee];
 }
 
 .story-panel li::before {
+	content: '';
+	@apply absolute left-0 top-[8px] h-[7px] w-[7px] rounded-full bg-primary;
+	box-shadow: 0 0 0 6px rgba(109, 186, 198, 0.2);
+}
+
+.mission-panel p {
+	@apply mb-0 mt-0 text-sm leading-[1.6] text-[#d4e2f5];
+}
+
+.principles-list {
+	@apply mb-0 mt-4 flex list-none flex-col gap-3 p-0;
+}
+
+.principles-list li {
+	@apply relative pl-5 text-sm leading-[1.6] text-[#cad8ee];
+}
+
+.principles-list li::before {
 	content: '';
 	@apply absolute left-0 top-[8px] h-[7px] w-[7px] rounded-full bg-primary;
 	box-shadow: 0 0 0 6px rgba(109, 186, 198, 0.2);
@@ -285,6 +358,53 @@ h4 {
 	@apply m-0 text-[#c2d1e8];
 }
 
+/* ── Team ── */
+.team-section {
+	@apply mt-12 px-1 py-2;
+}
+
+.team-title {
+	@apply m-0 text-[clamp(1.3rem,2.4vw,1.9rem)] font-bold leading-[1.1];
+	color: #edf4ff;
+}
+
+.team-capsules {
+	@apply mt-5 flex flex-wrap justify-center gap-3;
+}
+
+.team-capsule {
+	@apply flex items-center gap-3 border px-4 py-3;
+	border-color: rgba(255, 255, 255, 0.12);
+	background: linear-gradient(150deg, rgba(20, 32, 52, 0.84), rgba(13, 21, 35, 0.92));
+	border-radius: 999px;
+	transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
+	will-change: transform;
+	flex: 0 1 320px;
+	max-width: 320px;
+	width: min(320px, 100%);
+}
+
+.team-avatar {
+	@apply h-14 w-14 shrink-0 rounded-full object-cover;
+	border: 1px solid rgba(147, 201, 224, 0.45);
+}
+
+.team-capsule > div {
+	@apply min-w-0;
+}
+
+.team-role {
+	@apply mb-1 mt-0 text-xs font-bold uppercase tracking-[0.08em] text-[#99badf];
+}
+
+.team-name {
+	@apply m-0 truncate text-sm font-semibold leading-[1.45] text-[#ebf2ff];
+}
+
+.team-note {
+	@apply mb-0 mt-5 text-sm text-[#c8d8ef];
+}
+
 /* ── Impact ── */
 .impact-grid {
 	@apply mt-7 grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-4;
@@ -316,7 +436,7 @@ h4 {
 }
 
 .value-cards {
-	@apply mt-7 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4;
+	@apply mt-7 flex flex-wrap justify-center gap-4;
 }
 
 .value-card {
@@ -324,6 +444,9 @@ h4 {
 	border-radius: 20px;
 	transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
 	will-change: transform;
+	flex: 0 1 280px;
+	max-width: 320px;
+	width: min(320px, 100%);
 }
 
 .value-number {
@@ -337,7 +460,7 @@ h4 {
 }
 
 .value-card p {
-	@apply mb-0 mt-2 text-[#c8d7ec];
+	@apply mb-0 mt-2 text-[0.95rem] leading-[1.65] text-[#c8d7ec];
 }
 
 /* ── CTA ── */
@@ -444,12 +567,20 @@ h4 {
 	}
 
 	.host-photo {
-		@apply max-w-[320px];
+		@apply max-w-none;
 	}
 
 	.host-photo-wrap,
 	.host-photo {
 		border-radius: 22px;
+	}
+
+	.host-photo-wrap {
+		width: min(320px, 100%);
+		max-width: 320px;
+		margin-inline: auto;
+		transform: none;
+		aspect-ratio: auto;
 	}
 
 	.timeline-step {
@@ -465,11 +596,15 @@ h4 {
 	}
 
 	.hero-quick-grid {
-		@apply grid-cols-[repeat(2,1fr)];
+		@apply justify-center;
+	}
+
+	.about-jump-link {
+		@apply flex-[1_1_140px];
 	}
 
 	.value-cards {
-		@apply grid-cols-[repeat(2,1fr)];
+		@apply gap-3;
 	}
 
 	.impact-grid {
@@ -497,9 +632,21 @@ h4 {
 		@apply text-base;
 	}
 
+	.hero-lead + .hero-lead {
+		@apply mt-2;
+	}
+
 	/* Quick cards → single column, icon-left / text-right grid */
 	.hero-quick-grid {
-		@apply grid-cols-1 gap-3;
+		@apply justify-center gap-3;
+	}
+
+	.about-jump-nav {
+		@apply gap-[6px] p-[8px];
+	}
+
+	.about-jump-link {
+		@apply min-h-[40px] px-3 py-[7px] text-[13px];
 	}
 
 	.quick-card {
@@ -507,6 +654,7 @@ h4 {
 		grid-template-columns: 40px 1fr;
 		grid-template-rows: auto auto;
 		border-radius: 16px;
+		width: min(100%, 360px);
 	}
 
 	.quick-card .card-icon {
@@ -545,6 +693,17 @@ h4 {
 		@apply grid-cols-2 gap-3;
 	}
 
+	.team-capsule {
+		@apply px-3 py-3;
+		flex: 1 1 calc(50% - 6px);
+		max-width: calc(50% - 6px);
+		width: auto;
+	}
+
+	.team-name {
+		@apply text-sm;
+	}
+
 	.impact-card {
 		@apply flex flex-col items-center justify-center px-4 py-5;
 		border-radius: 16px;
@@ -560,12 +719,15 @@ h4 {
 
 	/* Value cards: 2-col, vertical stacking inside each card */
 	.value-cards {
-		@apply grid-cols-2 gap-3;
+		@apply gap-3;
 	}
 
 	.value-card {
 		@apply flex flex-col px-4 py-5;
 		border-radius: 16px;
+		flex: 1 1 calc(50% - 6px);
+		max-width: calc(50% - 6px);
+		width: auto;
 	}
 
 	.value-number {
@@ -628,6 +790,10 @@ h4 {
 		@apply mt-4 text-[15px] leading-[1.6];
 	}
 
+	.hero-lead + .hero-lead {
+		@apply mt-2;
+	}
+
 	.hero-kicker {
 		@apply px-3 py-[6px] text-[11px];
 	}
@@ -636,9 +802,17 @@ h4 {
 		@apply mt-6 w-full justify-center py-3 text-sm;
 	}
 
+	.about-jump-nav {
+		@apply gap-2;
+	}
+
+	.about-jump-link {
+		@apply flex-1 justify-center rounded-lg px-3 py-[9px] text-xs;
+	}
+
 	/* Quick cards: keep grid layout, refine spacing */
 	.hero-quick-grid {
-		@apply grid-cols-1 gap-3;
+		@apply justify-center gap-3;
 	}
 
 	.quick-card {
@@ -652,6 +826,10 @@ h4 {
 		@apply py-16;
 	}
 
+	.team-section {
+		@apply px-0 py-1;
+	}
+
 	.host-photo {
 		@apply max-w-full;
 	}
@@ -661,12 +839,23 @@ h4 {
 		border-radius: 18px;
 	}
 
+	.host-photo-wrap {
+		transform: none;
+		aspect-ratio: auto;
+		max-width: 320px;
+	}
+
+	.host-photo-ring {
+		@apply inset-3;
+	}
+
 	.host-links {
 		@apply mt-5 gap-2;
 	}
 
 	.host-social {
 		@apply px-3 py-[7px] text-[13px];
+		white-space: normal;
 	}
 
 	/* Story panel */
@@ -735,6 +924,16 @@ h4 {
 		@apply grid-cols-2 gap-3;
 	}
 
+	.team-capsule {
+		@apply max-w-full;
+		flex: 1 1 100%;
+		width: 100%;
+	}
+
+	.team-avatar {
+		@apply h-12 w-12;
+	}
+
 	.impact-card {
 		@apply flex flex-col items-center justify-center px-3 py-4;
 		border-radius: 14px;
@@ -751,7 +950,7 @@ h4 {
 
 	/* Values: single column, icon-left / text-right grid */
 	.value-cards {
-		@apply grid-cols-1 gap-3;
+		@apply gap-3;
 	}
 
 	.value-card {
@@ -759,6 +958,9 @@ h4 {
 		grid-template-columns: 44px 1fr;
 		grid-template-rows: auto auto;
 		border-radius: 14px;
+		flex: 1 1 100%;
+		max-width: 100%;
+		width: 100%;
 	}
 
 	.value-number {
@@ -837,6 +1039,10 @@ h4 {
 		border-radius: 12px;
 	}
 
+	.about-jump-link {
+		@apply px-2 py-[8px] text-[11px];
+	}
+
 	.card-icon {
 		@apply h-9 w-9 rounded-lg;
 	}
@@ -863,6 +1069,7 @@ h4 {
 	/* Host */
 	.host-social {
 		@apply gap-[6px] px-[10px] py-[6px] text-xs;
+		white-space: normal;
 	}
 
 	.host-social svg {
@@ -959,6 +1166,11 @@ h4 {
 	}
 
 	.story-panel li::before {
+		@apply top-[6px] h-[5px] w-[5px];
+		box-shadow: 0 0 0 4px rgba(109, 186, 198, 0.2);
+	}
+
+	.principles-list li::before {
 		@apply top-[6px] h-[5px] w-[5px];
 		box-shadow: 0 0 0 4px rgba(109, 186, 198, 0.2);
 	}
