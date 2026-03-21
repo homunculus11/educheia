@@ -280,7 +280,7 @@
   }
 
   .header-item {
-    @apply block rounded-[10px] px-[14px] py-3 text-center font-['Montserrat',sans-serif] text-base font-semibold tracking-[0.5px] text-text-main no-underline transition-all duration-200;
+    @apply block rounded-[10px] px-[14px] py-3 text-center font-['Space_Grotesk','Manrope',sans-serif] text-base font-semibold tracking-[0.5px] text-text-main no-underline transition-all duration-200;
   }
 
   .header-item:hover {
@@ -288,7 +288,7 @@
   }
 
   .header-item.active {
-    @apply bg-primary-soft font-bold text-primary;
+    @apply bg-primary-soft text-primary;
   }
 
   .header-overlay {
