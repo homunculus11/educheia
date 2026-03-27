@@ -68,14 +68,55 @@ const writeSessionValue = (key, value) => {
 
 const AUTH_RETURN_KEY = 'authReturnTo';
 
-const isAuthPath = (path) => /\/(?:(?:src\/)?(?:login|register)(?:\.html)?)$/i.test(String(path || '').replace(/\/+$/, ''));
+const normalizePathname = (path) => {
+	const normalized = String(path || '').replace(/\/+$/, '') || '/';
 
-const isSafeReturnPath = (target) => {
-	if (!target) return false;
+	if (/^\/(?:(?:src\/)?index(?:\.html)?)$/i.test(normalized)) {
+		return '/';
+	}
+
+	const namedRouteMatch = normalized.match(/^\/(?:(?:src\/)?(about|episodes|login|register|account)(?:\.html)?)$/i);
+	if (namedRouteMatch) {
+		return `/${namedRouteMatch[1].toLowerCase()}`;
+	}
+
+	return normalized;
+};
+
+const normalizeRelativeUrl = (target) => {
+	if (!target) return null;
 
 	try {
 		const parsed = new URL(target, window.location.origin);
-		if (parsed.origin !== window.location.origin) return false;
+		if (parsed.origin !== window.location.origin) return null;
+
+		const normalizedPath = normalizePathname(parsed.pathname);
+		return `${normalizedPath}${parsed.search}${parsed.hash}`;
+	} catch {
+		return null;
+	}
+};
+
+const getCanonicalAuthOrAccountPath = (path) => {
+	const normalizedPath = normalizePathname(path);
+	if (/^\/(login|register|account)$/i.test(normalizedPath)) {
+		return normalizedPath.toLowerCase();
+	}
+
+	return null;
+};
+
+const isAuthPath = (path) => {
+	const canonicalPath = getCanonicalAuthOrAccountPath(path);
+	return canonicalPath === '/login' || canonicalPath === '/register';
+};
+
+const isSafeReturnPath = (target) => {
+	const normalizedTarget = normalizeRelativeUrl(target);
+	if (!normalizedTarget) return false;
+
+	try {
+		const parsed = new URL(normalizedTarget, window.location.origin);
 		if (isAuthPath(parsed.pathname)) return false;
 		return true;
 	} catch {
@@ -85,21 +126,26 @@ const isSafeReturnPath = (target) => {
 
 const readAuthReturnPath = () => {
 	const value = readSessionValue(AUTH_RETURN_KEY);
-	return isSafeReturnPath(value) ? value : null;
+	if (!isSafeReturnPath(value)) return null;
+	return normalizeRelativeUrl(value);
 };
 
 const writeAuthReturnPath = (value) => {
 	if (!isSafeReturnPath(value)) return;
-	writeSessionValue(AUTH_RETURN_KEY, value);
+
+	const normalizedValue = normalizeRelativeUrl(value);
+	if (!normalizedValue) return;
+
+	writeSessionValue(AUTH_RETURN_KEY, normalizedValue);
 };
 
-const getCurrentRelativeUrl = () => `${window.location.pathname}${window.location.search}${window.location.hash}`;
+const getCurrentRelativeUrl = () => `${normalizePathname(window.location.pathname)}${window.location.search}${window.location.hash}`;
 
 const decorateAuthLinksWithRedirect = () => {
 	const isOnAuthPage = isAuthPath(window.location.pathname);
 	const currentUrl = getCurrentRelativeUrl();
 	const search = new URLSearchParams(window.location.search);
-	const queryRedirect = search.get('redirect');
+	const queryRedirect = normalizeRelativeUrl(search.get('redirect'));
 
 	if (!isOnAuthPage) {
 		writeAuthReturnPath(currentUrl);
@@ -126,9 +172,15 @@ const decorateAuthLinksWithRedirect = () => {
 			return;
 		}
 
-		if (!isAuthPath(parsedHref.pathname)) return;
+		const canonicalPath = getCanonicalAuthOrAccountPath(parsedHref.pathname);
+		if (!canonicalPath) return;
 
-		parsedHref.searchParams.set('redirect', redirectTarget);
+		parsedHref.pathname = canonicalPath;
+
+		if (isAuthPath(canonicalPath)) {
+			parsedHref.searchParams.set('redirect', redirectTarget);
+		}
+
 		const nextHref = `${parsedHref.pathname}${parsedHref.search}${parsedHref.hash}`;
 		if (rawHref !== nextHref) {
 			link.setAttribute('href', nextHref);
