@@ -52,6 +52,19 @@ This command runs the same build flow used by Pages automation:
 2. Creates a clean `dist/` folder
 3. Copies deployable files/folders (`assets`, `images`, `js`, `src`, `index.html`, `prototype.html` when present)
 4. Copies only compiled CSS files to `dist/css` (excludes `*.tailwind.css`)
+5. Fingerprints all `.js` and `.css` files in `dist/` and rewrites references in HTML and JS imports
+
+The build also writes `dist/asset-manifest.json` so you can verify source-to-fingerprinted mapping.
+
+## Production caching strategy
+
+For safe long-term caching without stale deploys:
+
+1. Keep HTML non-cacheable or short-lived (`no-cache` / low max-age)
+2. Cache fingerprinted JS/CSS aggressively (`max-age=31536000, immutable`)
+3. If using Cloudflare, use **Standard** cache behavior (do not cache HTML unless explicitly required)
+
+With fingerprinted assets, each deploy changes file names automatically when content changes, so browsers/CDN fetch new files without manual cache purges.
 
 ## Deploy to GitHub Pages (auto build + publish)
 
