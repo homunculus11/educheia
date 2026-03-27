@@ -68,7 +68,34 @@ const writeSessionValue = (key, value) => {
 
 const AUTH_RETURN_KEY = 'authReturnTo';
 
-const isAuthPath = (path) => /\/(?:(?:src\/)?(?:login|register)(?:\.html)?)$/i.test(String(path || '').replace(/\/+$/, ''));
+// Canonical auth-route map
+// Any variant of a login / register path (with or without src/ prefix,
+// with or without .html extension) is normalised to its clean route.
+const AUTH_CANONICAL_MAP = {
+	'/login':              '/login',
+	'/login.html':         '/login',
+	'/src/login':          '/login',
+	'/src/login.html':     '/login',
+	'/register':           '/register',
+	'/register.html':      '/register',
+	'/src/register':       '/register',
+	'/src/register.html':  '/register',
+};
+
+/**
+ * Return the canonical route for a given pathname, or the original value
+ * if it is not a known auth path variant.
+ */
+const canonicalAuthPathname = (pathname) => {
+	if (!pathname) return pathname;
+	const lower = pathname.toLowerCase();
+	return AUTH_CANONICAL_MAP[lower] ?? pathname;
+};
+
+const isAuthPath = (path) => {
+	const canonical = canonicalAuthPathname(String(path || '').replace(/\/+$/, ''));
+	return canonical === '/login' || canonical === '/register';
+};
 
 const isSafeReturnPath = (target) => {
 	if (!target) return false;
@@ -126,9 +153,16 @@ const decorateAuthLinksWithRedirect = () => {
 			return;
 		}
 
-		if (!isAuthPath(parsedHref.pathname)) return;
+		// Normalise to the canonical route (e.g. /src/login.html → /login)
+		const canonical = canonicalAuthPathname(parsedHref.pathname);
+		if (canonical === parsedHref.pathname && !isAuthPath(canonical)) return;
+		if (!isAuthPath(canonical)) return;
 
+		// Rebuild using the canonical pathname so we never write /src/login.html
+		// back into any href attribute.
+		parsedHref.pathname = canonical;
 		parsedHref.searchParams.set('redirect', redirectTarget);
+
 		const nextHref = `${parsedHref.pathname}${parsedHref.search}${parsedHref.hash}`;
 		if (rawHref !== nextHref) {
 			link.setAttribute('href', nextHref);
