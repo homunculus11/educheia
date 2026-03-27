@@ -137,7 +137,8 @@ const renderUserActions = (container, user, options = {}) => {
 
         try {
             await signOut(auth);
-            window.location.href = '/login';
+            const goTo = '/login';
+            window.location.href = goTo;
         } catch (error) {
             console.error('Logout failed', error);
             logoutBtn.disabled = false;
