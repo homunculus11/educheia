@@ -893,8 +893,7 @@ const formatEpisodeDescription = (text) => {
 };
 
 const getLoginRoute = () => {
-    const normalizedPath = window.location.pathname.replaceAll('\\', '/');
-    return normalizedPath.includes('/src/') ? './login.html' : './src/login.html';
+    return '/login';
 };
 
 const getCommentDisplayName = (user) => {

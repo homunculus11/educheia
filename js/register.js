@@ -12,10 +12,10 @@ import {
 
 const USERNAME_EMAIL_MAP_KEY = 'usernameEmailMap';
 const googleProvider = new GoogleAuthProvider();
-const DEFAULT_REDIRECT_PATH = './episodes.html';
+const DEFAULT_REDIRECT_PATH = '/episodes';
 const AUTH_RETURN_KEY = 'authReturnTo';
 
-const isAuthPath = (path) => /\/((src\/)?)(login|register)\.html$/i.test(String(path || ''));
+const isAuthPath = (path) => /\/(?:(?:src\/)?(?:login|register)(?:\.html)?)$/i.test(String(path || '').replace(/\/+$/, ''));
 
 const isSafeRedirect = (target) => {
     if (!target) return false;

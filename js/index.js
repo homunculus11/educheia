@@ -525,11 +525,11 @@ getEpisodes()
 
 const redirectToEpisode = (episodeId) => {
 	if (!episodeId) {
-		window.location.href = './src/episodes.html';
+		window.location.href = '/episodes';
 		return;
 	}
 
-	window.location.href = `./src/episodes.html#${encodeURIComponent(episodeId)}`;
+	window.location.href = `/episodes#${encodeURIComponent(episodeId)}`;
 };
 
 const fillEpisodeCards = async (data) => {

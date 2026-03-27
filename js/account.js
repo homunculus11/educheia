@@ -87,7 +87,7 @@ const renderRoleStatus = (claims = {}) => {
 const initAccountPage = () => {
     onAuthStateChanged(auth, async (user) => {
         if (!user) {
-            window.location.href = './login.html';
+            window.location.href = '/login';
             return;
         }
 
@@ -102,7 +102,7 @@ const initAccountPage = () => {
 
         const user = auth.currentUser;
         if (!user) {
-            window.location.href = './login.html';
+            window.location.href = '/login';
             return;
         }
 
@@ -126,7 +126,7 @@ const initAccountPage = () => {
     verifyBtn?.addEventListener('click', async () => {
         const user = auth.currentUser;
         if (!user) {
-            window.location.href = './login.html';
+            window.location.href = '/login';
             return;
         }
 
@@ -149,7 +149,7 @@ const initAccountPage = () => {
     resetPasswordBtn?.addEventListener('click', async () => {
         const user = auth.currentUser;
         if (!user?.email) {
-            window.location.href = './login.html';
+            window.location.href = '/login';
             return;
         }
 
@@ -168,7 +168,7 @@ const initAccountPage = () => {
         try {
             setButtonsDisabled(true);
             await signOut(auth);
-            window.location.href = './login.html';
+            window.location.href = '/login';
         } catch (error) {
             setFeedback(getReadableAuthError(error), 'error');
             setButtonsDisabled(false);

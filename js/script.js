@@ -68,7 +68,7 @@ const writeSessionValue = (key, value) => {
 
 const AUTH_RETURN_KEY = 'authReturnTo';
 
-const isAuthPath = (path) => /\/((src\/)?)(login|register)\.html$/i.test(String(path || ''));
+const isAuthPath = (path) => /\/(?:(?:src\/)?(?:login|register)(?:\.html)?)$/i.test(String(path || '').replace(/\/+$/, ''));
 
 const isSafeReturnPath = (target) => {
 	if (!target) return false;

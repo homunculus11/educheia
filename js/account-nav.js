@@ -4,16 +4,9 @@ import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/
 const USERNAME_EMAIL_MAP_KEY = 'usernameEmailMap';
 const AUTH_RENDER_FALLBACK_MS = 1200;
 
-const isSrcPage = () => window.location.pathname.replaceAll('\\', '/').includes('/src/');
-
 const getRoute = (page) => {
-    if (isSrcPage()) {
-        if (page === 'home') return '../index.html';
-        return `./${page}.html`;
-    }
-
-    if (page === 'home') return './index.html';
-    return `./src/${page}.html`;
+    if (page === 'home') return '/';
+    return `/${page}`;
 };
 
 const getDisplayName = (user) => {
@@ -144,7 +137,7 @@ const renderUserActions = (container, user, options = {}) => {
 
         try {
             await signOut(auth);
-            const goTo = isSrcPage() ? './login.html' : './src/login.html';
+            const goTo = '/login';
             window.location.href = goTo;
         } catch (error) {
             console.error('Logout failed', error);
