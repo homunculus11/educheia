@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const ROOT_DIR = process.cwd();
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 
-const COPY_ITEMS = ['assets', 'images', 'js', 'src', 'index.html', 'prototype.html'];
+const COPY_ITEMS = ['assets', 'images', 'js', 'src', 'index.html', 'robots.txt', 'sitemap.xml'];
 const FINGERPRINT_EXTENSIONS = new Set(['.js', '.css']);
 const REFERENCE_EXTENSIONS = new Set(['.html', '.js']);
 
