@@ -55,21 +55,25 @@ const clearReturnTarget = () => {
     }
 };
 
-const getRedirectTarget = () => {
-    const params = new URLSearchParams(window.location.search);
-    const queryTarget = params.get('redirect');
+const toRelativePath = (target) => {
+    if (!isSafeRedirect(target)) return null;
 
-    if (isSafeRedirect(queryTarget)) {
-        writeReturnTarget(queryTarget);
-        return queryTarget;
+    try {
+        const parsed = new URL(target, window.location.origin);
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch {
+        return null;
+    }
+};
+
+const getRedirectTarget = () => {
+    const storedTarget = readReturnTarget();
+    if (storedTarget) {
+        return toRelativePath(storedTarget) || DEFAULT_REDIRECT_PATH;
     }
 
-    const storedTarget = readReturnTarget();
-    if (storedTarget) return storedTarget;
-
     if (isSafeRedirect(document.referrer)) {
-        writeReturnTarget(document.referrer);
-        return document.referrer;
+        return toRelativePath(document.referrer) || DEFAULT_REDIRECT_PATH;
     }
 
     return DEFAULT_REDIRECT_PATH;

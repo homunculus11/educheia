@@ -110,11 +110,6 @@ const isSafeReturnPath = (target) => {
 	}
 };
 
-const readAuthReturnPath = () => {
-	const value = readSessionValue(AUTH_RETURN_KEY);
-	return isSafeReturnPath(value) ? value : null;
-};
-
 const writeAuthReturnPath = (value) => {
 	if (!isSafeReturnPath(value)) return;
 	writeSessionValue(AUTH_RETURN_KEY, value);
@@ -122,24 +117,13 @@ const writeAuthReturnPath = (value) => {
 
 const getCurrentRelativeUrl = () => `${window.location.pathname}${window.location.search}${window.location.hash}`;
 
-const decorateAuthLinksWithRedirect = () => {
+const normalizeAuthLinks = () => {
 	const isOnAuthPage = isAuthPath(window.location.pathname);
 	const currentUrl = getCurrentRelativeUrl();
-	const search = new URLSearchParams(window.location.search);
-	const queryRedirect = search.get('redirect');
 
 	if (!isOnAuthPage) {
 		writeAuthReturnPath(currentUrl);
-	} else if (isSafeReturnPath(queryRedirect)) {
-		writeAuthReturnPath(queryRedirect);
 	}
-
-	const storedRedirect = readAuthReturnPath();
-	const redirectTarget = isOnAuthPage
-		? (isSafeReturnPath(queryRedirect) ? queryRedirect : storedRedirect)
-		: currentUrl;
-
-	if (!isSafeReturnPath(redirectTarget)) return;
 
 	const links = document.querySelectorAll('a[href]');
 	links.forEach((link) => {
@@ -161,7 +145,6 @@ const decorateAuthLinksWithRedirect = () => {
 		// Rebuild using the canonical pathname so we never write /src/login.html
 		// back into any href attribute.
 		parsedHref.pathname = canonical;
-		parsedHref.searchParams.set('redirect', redirectTarget);
 
 		const nextHref = `${parsedHref.pathname}${parsedHref.search}${parsedHref.hash}`;
 		if (rawHref !== nextHref) {
@@ -170,7 +153,7 @@ const decorateAuthLinksWithRedirect = () => {
 	});
 };
 
-decorateAuthLinksWithRedirect();
+normalizeAuthLinks();
 
 const authLinksObserver = new MutationObserver((mutations) => {
 	const hasRelevantMutation = mutations.some((mutation) => {
@@ -181,7 +164,7 @@ const authLinksObserver = new MutationObserver((mutations) => {
 	});
 
 	if (hasRelevantMutation) {
-		decorateAuthLinksWithRedirect();
+		normalizeAuthLinks();
 	}
 });
 
