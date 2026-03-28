@@ -101,11 +101,11 @@
   }
 
   .brand-name {
-    @apply whitespace-nowrap font-['Montserrat',sans-serif] text-base font-bold uppercase tracking-[2.4px] text-text-main;
+    @apply whitespace-nowrap font-['Space_Grotesk',sans-serif] text-base font-bold uppercase tracking-[2.4px] text-text-main;
   }
 
   .brand-tagline {
-    @apply whitespace-nowrap font-['Open_Sans',sans-serif] text-[13px] font-semibold text-text-muted;
+    @apply whitespace-nowrap font-['Space_Grotesk',sans-serif] text-[13px] font-semibold text-text-muted;
   }
 
   .header-items {
@@ -114,6 +114,11 @@
 
   .header-btns {
     @apply flex items-center justify-start gap-3;
+  }
+
+  .header-items,
+  .header-btns {
+    font-family: 'Space Grotesk', 'Manrope', sans-serif;
   }
 
   .header-btns.auth-pending {
@@ -539,8 +544,19 @@
   border-radius: 999px;
 }
 
-.header-item {
+.header-item,
+#login-btn,
+#signup-btn,
+.account-toggle,
+.account-toggle-name,
+.dropdown-name,
+.dropdown-email,
+.dropdown-role,
+.dropdown-item {
   font-family: 'Space Grotesk', 'Manrope', sans-serif;
+}
+
+.header-item {
   font-size: 1.06rem;
   letter-spacing: 0.03em;
   padding-top: 10px;

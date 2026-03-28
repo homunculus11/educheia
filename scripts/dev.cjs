@@ -121,7 +121,7 @@ function scriptArgs(scriptName) {
 
 // ── Banner ───────────────────────────────────────────────────────────────────
 divider('Educheia Dev');
-info(`Starting ${c(B, 'CSS watcher')} + ${c(B, 'dev server')} on ${c(GRN, `http://localhost:${PORT}`)}`);
+info(`Starting ${c(B, 'CSS watcher')} + ${c(B, 'dev server')} on ${c(GRN, `http://127.0.0.1:${PORT}`)}`);
 info(`Press ${c(B, 'Ctrl+C')} to stop`);
 
 // ── Start processes ──────────────────────────────────────────────────────────
