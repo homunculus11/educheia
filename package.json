@@ -1,7 +1,8 @@
 {
-  "name": "tekwill",
+  "name": "educheia",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "dev": "node ./scripts/dev.cjs",
     "run": "node ./scripts/dev-server.cjs --root dist --port 4173",
@@ -11,13 +12,14 @@
     "watch:css": "node ./scripts/tailwind-auto.cjs watch"
   },
   "devDependencies": {
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^3.4.19"
   },
   "dependencies": {
     "express": "^5.2.1",
-    "firebase": "^12.9.0",
+    "firebase": "^12.11.0",
     "node-fetch": "^3.3.2",
-    "sharp": "^0.34.4",
+    "sharp": "^0.34.5",
+    "update-browserslist-db": "^1.2.3",
     "url": "^0.11.4"
   }
 }

@@ -1,24 +1,33 @@
-# Tekwill App – Development Guide
+# Educheia App – Development Guide
 
 Quick setup and workflow for local development.
 
 ## Prerequisites
 
-- Node.js 18+ (recommended)
-- npm
+- Node.js 20+ (LTS recommended)
+- pnpm (recommended via Corepack)
+
+Enable Corepack once per machine (if needed):
+
+```bash
+corepack enable
+```
 
 ## Install dependencies
 
 ```bash
-npm install
+pnpm install
 ```
+
+Note: this repository is pinned to pnpm via `packageManager` in `package.json`.
+Using `npm install` with very new npm/Node combinations (for example npm 11 + Node 25) can fail in Arborist with errors like `Cannot read properties of null (reading 'matches')`.
 
 ## Development workflow
 
 1. Start development mode (server + CSS watcher):
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 This command runs both:
@@ -36,7 +45,7 @@ The dev server process is started in Node watch mode and restarts automatically 
 ## Build CSS only
 
 ```bash
-npm run build:css
+pnpm build:css
 ```
 
 This discovers all `*.tailwind.css` files in the workspace and compiles each one to a matching `.css` file (same path, same filename without `.tailwind`).
@@ -45,19 +54,19 @@ By default, builds now run in parallel using multiple workers (roughly CPU cores
 You can control this when needed:
 
 ```bash
-npm run build:css -- --concurrency 1
+pnpm build:css -- --concurrency 1
 ```
 
 Or with env var:
 
 ```bash
-TAILWIND_BUILD_CONCURRENCY=1 npm run build:css
+TAILWIND_BUILD_CONCURRENCY=1 pnpm build:css
 ```
 
 PowerShell equivalent:
 
 ```powershell
-$env:TAILWIND_BUILD_CONCURRENCY=1; npm run build:css
+$env:TAILWIND_BUILD_CONCURRENCY=1; pnpm build:css
 ```
 
 Examples:
@@ -68,7 +77,7 @@ Examples:
 ## Build production artifact
 
 ```bash
-npm run build
+pnpm build
 ```
 
 This command runs the same build flow used by Pages automation:
@@ -96,7 +105,7 @@ With fingerprinted assets, each deploy changes file names automatically when con
 This repository includes a workflow at `.github/workflows/pages.yml` that:
 
 1. Installs dependencies
-2. Runs `npm run build` (full production artifact build)
+2. Runs `pnpm build` (full production artifact build)
 3. Publishes the built static site to GitHub Pages
 
 ### One-time setup in GitHub
@@ -151,5 +160,5 @@ Important:
 
 ## Notes
 
-- `npm run watch:css` automatically picks up new `*.tailwind.css` files and starts watching them.
+- `pnpm watch:css` automatically picks up new `*.tailwind.css` files and starts watching them.
 - The project uses Tailwind utility classes plus custom theme tokens from the config.
