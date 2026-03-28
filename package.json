@@ -6,7 +6,7 @@
     "dev": "node ./scripts/dev.cjs",
     "run": "node ./scripts/dev-server.cjs --root dist --port 4173",
     "build": "node ./scripts/build.cjs",
-    "build:css": "node ./scripts/tailwind-auto.cjs build",
+    "build:css": "node ./scripts/tailwind-auto.cjs build --concurrency 7",
     "watch:css": "node ./scripts/tailwind-auto.cjs watch"
   },
   "devDependencies": {

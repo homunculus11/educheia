@@ -65,7 +65,7 @@ Examples:
 - `css/index.tailwind.css` → `css/index.css`
 - `css/prototype.tailwind.css` → `css/prototype.css`
 
-## Build production artifact (Pages-like)
+## Build production artifact
 
 ```bash
 npm run build
