@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "node ./scripts/dev-server.cjs --root . --port 5173",
+    "dev": "node ./scripts/dev.cjs",
     "run": "node ./scripts/dev-server.cjs --root dist --port 4173",
     "build": "node ./scripts/pages-build.cjs",
     "build:css": "node ./scripts/tailwind-auto.cjs build",

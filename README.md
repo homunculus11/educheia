@@ -15,17 +15,23 @@ npm install
 
 ## Development workflow
 
-1. Start Tailwind watch mode:
+1. Start development mode (server + CSS watcher):
 
 ```bash
-npm run watch:css
+npm run dev
 ```
 
-2. Open the app in the browser:
-   - Main page: `index.html`
-   - Other pages: `prototype.html`, `src/login.html`
+This command runs both:
 
-You can open files directly, but using a local static server (for example VS Code Live Server) is recommended during development.
+- Tailwind watch mode for all `*.tailwind.css` files
+- Local dev server at `http://localhost:5173`
+
+2. Open the app in the browser:
+
+- Main page: `http://localhost:5173/`
+- Other pages: `http://localhost:5173/about`, `http://localhost:5173/episodes`, `http://localhost:5173/login`
+
+The dev server process is started in Node watch mode and restarts automatically when files in `index.html`, `src/`, or `js/` change.
 
 ## Build CSS only
 
