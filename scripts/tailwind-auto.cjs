@@ -1,242 +1,164 @@
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const { spawn } = require('child_process');
+'use strict';
 
-const ROOT_DIR = process.cwd();
-const IGNORED_DIRS = new Set(['node_modules', '.git']);
+const fs   = require('fs');
+const path = require('path');
+const os   = require('os');
+const { spawn } = require('child_process');
+const { log, warn, error, info, divider, elapsed, c, B, D, GRN, YLW, CYN, R } = require('./_logger.cjs');
+
+// ── Config ───────────────────────────────────────────────────────────────────
+const ROOT_DIR    = process.cwd();
+const IGNORED     = new Set(['node_modules', '.git', 'dist']);
 const SOURCE_SUFFIX = '.tailwind.css';
 
-function toPosixPath(filePath) {
-  return filePath.split(path.sep).join('/');
-}
+// ── Utilities ────────────────────────────────────────────────────────────────
+const posix = (p) => p.split(path.sep).join('/');
+const rel   = (p) => posix(path.relative(ROOT_DIR, p));
 
-function walkDir(dirPath, result = []) {
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const fullPath = path.join(dirPath, entry.name);
-
+function walkForSources(dir, out = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
-      if (!IGNORED_DIRS.has(entry.name)) {
-        walkDir(fullPath, result);
-      }
-      continue;
-    }
-
-    if (entry.isFile() && entry.name.endsWith(SOURCE_SUFFIX)) {
-      result.push(fullPath);
+      if (!IGNORED.has(entry.name)) walkForSources(path.join(dir, entry.name), out);
+    } else if (entry.isFile() && entry.name.endsWith(SOURCE_SUFFIX)) {
+      out.push(path.join(dir, entry.name));
     }
   }
-
-  return result;
+  return out;
 }
 
-function getSourceFiles() {
-  return walkDir(ROOT_DIR).sort((a, b) => a.localeCompare(b));
-}
+const getSources   = () => walkForSources(ROOT_DIR).sort((a, b) => a.localeCompare(b));
+const outputFor    = (src) => src.replace(/\.tailwind\.css$/i, '.css');
 
-function getOutputFile(sourceFile) {
-  return sourceFile.replace(/\.tailwind\.css$/i, '.css');
-}
-
-function parsePositiveInteger(value) {
-  const parsed = Number.parseInt(String(value), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function readOptionValue(args, optionNames) {
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-
-    for (const optionName of optionNames) {
-      if (arg === optionName) {
-        return args[index + 1];
-      }
-
-      if (arg.startsWith(`${optionName}=`)) {
-        return arg.slice(optionName.length + 1);
-      }
+function readArgValue(args, names) {
+  for (let i = 0; i < args.length; i++) {
+    for (const name of names) {
+      if (args[i] === name)              return args[i + 1];
+      if (args[i].startsWith(`${name}=`)) return args[i].slice(name.length + 1);
     }
   }
-
-  return undefined;
 }
 
-function resolveBuildConcurrency(sourceCount, rawArgs = []) {
-  const fromArgs = parsePositiveInteger(readOptionValue(rawArgs, ['--concurrency', '--parallel', '-j']));
-  const fromEnv = parsePositiveInteger(process.env.TAILWIND_BUILD_CONCURRENCY);
-  const requested = fromArgs || fromEnv;
+function parseConcurrency(sources, rawArgs) {
+  const fromArg = Number.parseInt(readArgValue(rawArgs, ['--concurrency', '--parallel', '-j']), 10);
+  const fromEnv = Number.parseInt(process.env.TAILWIND_BUILD_CONCURRENCY ?? '', 10);
+  const requested = (Number.isFinite(fromArg) && fromArg > 0) ? fromArg
+                  : (Number.isFinite(fromEnv) && fromEnv > 0) ? fromEnv
+                  : null;
+  if (requested) return Math.min(requested, sources.length);
 
-  if (requested) {
-    return Math.min(requested, sourceCount);
-  }
-
-  const cpuCount = Array.isArray(os.cpus()) && os.cpus().length > 0 ? os.cpus().length : 1;
-  const defaultConcurrency = Math.max(1, cpuCount - 1);
-  return Math.min(defaultConcurrency, sourceCount);
+  const cpus = os.cpus()?.length || 1;
+  return Math.min(Math.max(1, cpus - 1), sources.length);
 }
 
-function getTailwindCommand() {
-  return process.execPath;
+function tailwindCmd(src, out, watch = false) {
+  const cli  = require.resolve('tailwindcss/lib/cli.js');
+  const args = [cli, '-i', src, '-o', out, watch ? '--watch' : '--minify'];
+  return { bin: process.execPath, args };
 }
 
-function getTailwindArgs(sourceFile, outputFile, watch = false) {
-  const cliPath = require.resolve('tailwindcss/lib/cli.js');
-  const args = [cliPath, '-i', sourceFile, '-o', outputFile];
-
-  if (watch) {
-    args.push('--watch');
-  } else {
-    args.push('--minify');
-  }
-
-  return args;
-}
-
-function runTailwindOnce(sourceFile) {
+// ── Build ─────────────────────────────────────────────────────────────────────
+function buildOne(src, label) {
   return new Promise((resolve, reject) => {
-    const outputFile = getOutputFile(sourceFile);
-    const command = getTailwindCommand();
-    const args = getTailwindArgs(sourceFile, outputFile, false);
-
-    const child = spawn(command, args, { stdio: 'inherit' });
-
+    const out       = outputFor(src);
+    const { bin, args } = tailwindCmd(src, out, false);
+    const child     = spawn(bin, args, { stdio: 'inherit' });
     child.on('error', reject);
     child.on('exit', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`Build failed for ${toPosixPath(path.relative(ROOT_DIR, sourceFile))} (exit ${code})`));
-      }
+      code === 0
+        ? resolve()
+        : reject(new Error(`Tailwind failed for ${label} (exit ${code})`));
     });
   });
 }
 
-async function buildAll() {
-  const sources = getSourceFiles();
+async function buildAll(rawArgs) {
+  const sources     = getSources();
+  const totalSteps  = sources.length;
+  const t0          = Date.now();
 
-  if (sources.length === 0) {
-    console.log('No .tailwind.css files found.');
-    return;
-  }
+  if (sources.length === 0) { warn('No .tailwind.css source files found'); return; }
 
-  console.log(`Found ${sources.length} source file(s).`);
+  const concurrency = parseConcurrency(sources, rawArgs);
+  divider('Tailwind CSS Build');
+  info(`Found ${c(B, String(totalSteps))} source file(s)  ·  concurrency ${c(B, String(concurrency))}`);
 
-  const rawArgs = process.argv.slice(3);
-  const concurrency = resolveBuildConcurrency(sources.length, rawArgs);
-  console.log(`Using ${concurrency} concurrent worker(s).`);
-
-  if (concurrency === 1) {
-    for (const source of sources) {
-      const relSource = toPosixPath(path.relative(ROOT_DIR, source));
-      const relOutput = toPosixPath(path.relative(ROOT_DIR, getOutputFile(source)));
-      console.log(`Building ${relSource} -> ${relOutput}`);
-      await runTailwindOnce(source);
-    }
-    return;
-  }
-
-  let nextIndex = 0;
   let completed = 0;
+  let nextIndex = 0;
 
-  const runWorker = async (workerId) => {
+  const worker = async () => {
     while (nextIndex < sources.length) {
-      const source = sources[nextIndex];
-      nextIndex += 1;
+      const src   = sources[nextIndex++];
+      const out   = outputFor(src);
+      const label = `${rel(src)} → ${rel(out)}`;
+      const tFile = Date.now();
 
-      const relSource = toPosixPath(path.relative(ROOT_DIR, source));
-      const relOutput = toPosixPath(path.relative(ROOT_DIR, getOutputFile(source)));
-      console.log(`[worker ${workerId}] Building ${relSource} -> ${relOutput}`);
-      await runTailwindOnce(source);
-      completed += 1;
-      console.log(`[worker ${workerId}] Completed ${completed}/${sources.length}`);
+      await buildOne(src, label);
+
+      completed++;
+      console.log(`  ${c(GRN, '✔')}  [${String(completed).padStart(String(totalSteps).length)}/${totalSteps}]  ${c(D, rel(src))}  ${c(D, elapsed(tFile))}`);
     }
   };
 
-  const workers = Array.from({ length: concurrency }, (_unused, index) => runWorker(index + 1));
-  await Promise.all(workers);
+  await Promise.all(Array.from({ length: concurrency }, worker));
+
+  console.log();
+  log(`Built ${totalSteps} file(s) in ${elapsed(t0)}`);
 }
 
-function startWatcherForFile(sourceFile) {
-  const outputFile = getOutputFile(sourceFile);
-  const relSource = toPosixPath(path.relative(ROOT_DIR, sourceFile));
-  const relOutput = toPosixPath(path.relative(ROOT_DIR, outputFile));
-  const command = getTailwindCommand();
-  const args = getTailwindArgs(sourceFile, outputFile, true);
+// ── Watch ─────────────────────────────────────────────────────────────────────
+function watchFile(src) {
+  const out       = outputFor(src);
+  const { bin, args } = tailwindCmd(src, out, true);
+  info(`Watching ${c(D, rel(src))} → ${c(D, rel(out))}`);
 
-  console.log(`Watching ${relSource} -> ${relOutput}`);
-
-  const child = spawn(command, args, { stdio: 'inherit' });
-  child.on('error', (error) => {
-    console.error(`Watcher error for ${relSource}:`, error.message);
-  });
-
+  const child = spawn(bin, args, { stdio: 'inherit' });
+  child.on('error', (err) => error(`Watcher error [${rel(src)}]: ${err.message}`));
   return child;
 }
 
 function watchAll() {
+  divider('Tailwind CSS Watch');
   const watchers = new Map();
 
-  const syncWatchers = () => {
-    const currentFiles = new Set(getSourceFiles());
+  const sync = () => {
+    const current = new Set(getSources());
 
-    for (const sourceFile of currentFiles) {
-      if (!watchers.has(sourceFile)) {
-        const child = startWatcherForFile(sourceFile);
-        watchers.set(sourceFile, child);
-      }
+    for (const src of current) {
+      if (!watchers.has(src)) watchers.set(src, watchFile(src));
     }
 
-    for (const [sourceFile, child] of watchers.entries()) {
-      if (!currentFiles.has(sourceFile)) {
-        const relSource = toPosixPath(path.relative(ROOT_DIR, sourceFile));
-        console.log(`Stopping watcher for removed file ${relSource}`);
+    for (const [src, child] of watchers) {
+      if (!current.has(src)) {
+        info(`Stopping watcher: ${rel(src)}`);
         child.kill('SIGTERM');
-        watchers.delete(sourceFile);
+        watchers.delete(src);
       }
     }
 
-    if (watchers.size === 0) {
-      console.log('No .tailwind.css files found yet. Waiting for new files...');
-    }
+    if (watchers.size === 0) warn('No .tailwind.css files found yet — waiting…');
   };
 
-  syncWatchers();
-  const intervalId = setInterval(syncWatchers, 2000);
+  sync();
+  const id = setInterval(sync, 2_000);
 
-  const shutdown = () => {
-    clearInterval(intervalId);
-
-    for (const child of watchers.values()) {
-      child.kill('SIGTERM');
-    }
-
+  const quit = () => {
+    clearInterval(id);
+    for (const child of watchers.values()) child.kill('SIGTERM');
     process.exit(0);
   };
-
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', quit);
+  process.on('SIGTERM', quit);
 }
 
+// ── Entry ─────────────────────────────────────────────────────────────────────
 async function main() {
-  const mode = process.argv[2];
+  const [,, mode, ...rawArgs] = process.argv;
 
-  if (mode === 'build') {
-    await buildAll();
-    return;
-  }
+  if (mode === 'build') { await buildAll(rawArgs); return; }
+  if (mode === 'watch') { watchAll(); return; }
 
-  if (mode === 'watch') {
-    watchAll();
-    return;
-  }
-
-  console.error('Usage: node scripts/tailwind-auto.cjs <build|watch> [--concurrency <n>]');
+  error('Usage: node scripts/tailwind-auto.cjs <build|watch> [--concurrency <n>]');
   process.exit(1);
 }
 
-main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+main().catch((e) => { error(e.message || String(e)); process.exit(1); });

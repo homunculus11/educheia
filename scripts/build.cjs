@@ -1,99 +1,128 @@
-const fs = require('fs');
-const path = require('path');
-const { spawnSync } = require('child_process');
+'use strict';
+
+const fs     = require('fs');
+const path   = require('path');
 const crypto = require('crypto');
+const { spawnSync } = require('child_process');
+const { log, warn, error, info, step, divider, elapsed, bytes, summary, c, B, D, GRN, YLW, CYN, R } = require('./_logger.cjs');
 
-const ROOT_DIR = process.cwd();
-const DIST_DIR = path.join(ROOT_DIR, 'dist');
+// ── Config ───────────────────────────────────────────────────────────────────
+const ROOT_DIR            = process.cwd();
+const DIST_DIR            = path.join(ROOT_DIR, 'dist');
+const COPY_ITEMS          = ['images', 'js', 'src', 'index.html', 'robots.txt', 'sitemap.xml'];
+const FINGERPRINT_EXTS    = new Set(['.js', '.css']);
+const REFERENCE_EXTS      = new Set(['.html', '.js']);
+const TOTAL_STEPS         = 6;
 
-const COPY_ITEMS = ['images', 'js', 'src', 'index.html', 'robots.txt', 'sitemap.xml'];
-const FINGERPRINT_EXTENSIONS = new Set(['.js', '.css']);
-const REFERENCE_EXTENSIONS = new Set(['.html', '.js']);
-const DIVIDER = '='.repeat(64);
+// ── Flags ────────────────────────────────────────────────────────────────────
+const argv        = process.argv.slice(2);
+const SKIP_IMAGES = argv.includes('--no-images') || argv.includes('--fast');
 
-function logHeader(title) {
-  console.log(`\n${DIVIDER}`);
-  console.log(title);
-  console.log(DIVIDER);
+// ── Utilities ────────────────────────────────────────────────────────────────
+function toPosix(p) { return p.split(path.sep).join('/'); }
+
+function toModuleRelative(fromDir, toFile) {
+  const rel = toPosix(path.relative(fromDir, toFile));
+  return rel && !rel.startsWith('.') && !rel.startsWith('/') ? `./${rel}` : rel;
 }
 
-function logStep(message) {
-  console.log(`- ${message}`);
-}
-
-function logSummary(lines) {
-  console.log('\nBuild Summary');
-  for (const line of lines) {
-    console.log(`  ${line}`);
-  }
-}
-
-function formatDuration(durationMs) {
-  const seconds = durationMs / 1000;
-  return `${seconds.toFixed(2)}s`;
-}
-
-function toPosixPath(filePath) {
-  return filePath.split(path.sep).join('/');
-}
-
-function toModuleRelativePath(fromAbsDir, toAbsFile) {
-  const relative = toPosixPath(path.relative(fromAbsDir, toAbsFile));
-  if (!relative || (!relative.startsWith('.') && !relative.startsWith('/'))) {
-    return `./${relative}`;
-  }
-  return relative;
-}
-
-function walkFiles(rootDir) {
+function walk(dir) {
   const files = [];
-
-  if (!fs.existsSync(rootDir)) {
-    return files;
-  }
-
-  function walk(currentPath) {
-    const entries = fs.readdirSync(currentPath, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(currentPath, entry.name);
-      if (entry.isDirectory()) {
-        walk(fullPath);
-      } else {
-        files.push(fullPath);
-      }
+  if (!fs.existsSync(dir)) return files;
+  const recurse = (cur) => {
+    for (const entry of fs.readdirSync(cur, { withFileTypes: true })) {
+      const full = path.join(cur, entry.name);
+      entry.isDirectory() ? recurse(full) : files.push(full);
     }
-  }
-
-  walk(rootDir);
+  };
+  recurse(dir);
   return files;
 }
 
-function buildFingerprintName(fileName, contentBuffer) {
-  const parsed = path.parse(fileName);
-  const digest = crypto.createHash('sha256').update(contentBuffer).digest('hex').slice(0, 10);
-  return `${parsed.name}.${digest}${parsed.ext}`;
+function runScript(scriptName) {
+  const t0 = Date.now();
+  info(`Running script: ${c(B, scriptName)}`);
+
+  const useExecpath = Boolean(process.env.npm_execpath);
+  const command     = useExecpath ? process.execPath : (process.platform === 'win32' ? 'npm.cmd' : 'npm');
+  const args        = useExecpath
+    ? [process.env.npm_execpath, 'run', scriptName]
+    : ['run', scriptName];
+
+  const result = spawnSync(command, args, {
+    stdio : 'inherit',
+    cwd   : ROOT_DIR,
+    shell : !useExecpath && process.platform === 'win32',
+  });
+
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`Script "${scriptName}" exited with code ${result.status}`);
+
+  log(`${scriptName} finished in ${elapsed(t0)}`);
+}
+
+// ── Steps ────────────────────────────────────────────────────────────────────
+function cleanDist() {
+  fs.rmSync(DIST_DIR, { recursive: true, force: true });
+  fs.mkdirSync(DIST_DIR, { recursive: true });
+  log('dist/ cleaned and recreated');
+}
+
+function copyItems() {
+  const results = [];
+  for (const item of COPY_ITEMS) {
+    const src  = path.join(ROOT_DIR, item);
+    const dest = path.join(DIST_DIR, item);
+    if (!fs.existsSync(src)) {
+      console.log(`  ${c(YLW, '─')}  skipped ${c(D, item)} ${c(D, '(not found)')}`);
+      results.push(false);
+    } else {
+      fs.cpSync(src, dest, { recursive: true });
+      console.log(`  ${c(GRN, '+')}  ${item}`);
+      results.push(true);
+    }
+  }
+  return results.filter(Boolean).length;
+}
+
+function copyBuiltCss() {
+  const cssDir  = path.join(ROOT_DIR, 'css');
+  const destDir = path.join(DIST_DIR, 'css');
+  if (!fs.existsSync(cssDir)) { warn('css/ not found — skipping'); return 0; }
+
+  fs.mkdirSync(destDir, { recursive: true });
+  let n = 0;
+  for (const entry of fs.readdirSync(cssDir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    if (!entry.name.endsWith('.css') || entry.name.endsWith('.tailwind.css')) continue;
+    fs.copyFileSync(path.join(cssDir, entry.name), path.join(destDir, entry.name));
+    console.log(`  ${c(GRN, '+')}  css/${entry.name}`);
+    n++;
+  }
+  return n;
+}
+
+function buildFingerprintName(name, buf) {
+  const { name: base, ext } = path.parse(name);
+  const hash = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 10);
+  return `${base}.${hash}${ext}`;
 }
 
 function fingerprintAssets() {
-  const allFiles = walkFiles(DIST_DIR);
-  const fingerprintEntries = allFiles
-    .filter((filePath) => FINGERPRINT_EXTENSIONS.has(path.extname(filePath).toLowerCase()))
-    .map((filePath) => ({
-      absPath: filePath,
-      relPath: toPosixPath(path.relative(DIST_DIR, filePath)),
-    }))
-    .sort((a, b) => a.relPath.localeCompare(b.relPath));
+  const entries = walk(DIST_DIR)
+    .filter((f) => FINGERPRINT_EXTS.has(path.extname(f).toLowerCase()))
+    .map((f) => ({ abs: f, rel: toPosix(path.relative(DIST_DIR, f)) }))
+    .sort((a, b) => a.rel.localeCompare(b.rel));
 
   const manifest = {};
-
-  for (const entry of fingerprintEntries) {
-    const buffer = fs.readFileSync(entry.absPath);
-    const nextName = buildFingerprintName(path.basename(entry.absPath), buffer);
-    const nextAbsPath = path.join(path.dirname(entry.absPath), nextName);
-    const nextRelPath = toPosixPath(path.relative(DIST_DIR, nextAbsPath));
-
-    fs.renameSync(entry.absPath, nextAbsPath);
-    manifest[entry.relPath] = nextRelPath;
+  for (const { abs, rel } of entries) {
+    const buf     = fs.readFileSync(abs);
+    const newName = buildFingerprintName(path.basename(abs), buf);
+    const newAbs  = path.join(path.dirname(abs), newName);
+    const newRel  = toPosix(path.relative(DIST_DIR, newAbs));
+    fs.renameSync(abs, newAbs);
+    manifest[rel] = newRel;
+    console.log(`  ${c(CYN, '⟳')}  ${c(D, rel)} → ${newName}`);
   }
 
   fs.writeFileSync(
@@ -101,185 +130,105 @@ function fingerprintAssets() {
     `${JSON.stringify(manifest, null, 2)}\n`,
     'utf8'
   );
-
-  console.log(`  Fingerprinted ${Object.keys(manifest).length} asset(s).`);
   return manifest;
 }
 
-function rewriteAssetReferences(manifest) {
-  const entries = Object.entries(manifest);
-  if (entries.length === 0) {
-    return { scannedFiles: 0, rewrittenFiles: 0 };
-  }
+function rewriteReferences(manifest) {
+  if (!Object.keys(manifest).length) return { scanned: 0, rewritten: 0 };
 
-  const targetFiles = walkFiles(DIST_DIR)
-    .filter((filePath) => REFERENCE_EXTENSIONS.has(path.extname(filePath).toLowerCase()));
+  const targets   = walk(DIST_DIR).filter((f) => REFERENCE_EXTS.has(path.extname(f).toLowerCase()));
+  const tokenRegex = /(["'])([^"'#?]+\.(?:js|css))((?:\?[^"'#]*)?)(#[^"']*)?\1/g;
+  let rewritten = 0;
 
-  const pathTokenRegex = /(["'])([^"'#?]+\.(?:js|css))((?:\?[^"'#]*)?)(#[^"']*)?\1/g;
-  let rewrittenFiles = 0;
-
-  for (const filePath of targetFiles) {
+  for (const filePath of targets) {
     const original = fs.readFileSync(filePath, 'utf8');
-    const fileDir = path.dirname(filePath);
+    const fileDir  = path.dirname(filePath);
 
-    const rewritten = original.replace(pathTokenRegex, (fullMatch, quote, targetPath, query = '', hash = '') => {
-      if (/^(?:https?:)?\/\//i.test(targetPath) || targetPath.startsWith('data:')) {
-        return fullMatch;
-      }
+    const updated = original.replace(tokenRegex, (full, q, target, query = '', hash = '') => {
+      if (/^(?:https?:)?\/\//i.test(target) || target.startsWith('data:')) return full;
 
-      const resolvedAbsPath = targetPath.startsWith('/')
-        ? path.join(DIST_DIR, targetPath.replace(/^\/+/, ''))
-        : path.resolve(fileDir, targetPath);
+      const absResolved = target.startsWith('/')
+        ? path.join(DIST_DIR, target.replace(/^\/+/, ''))
+        : path.resolve(fileDir, target);
 
-      const resolvedRelPath = toPosixPath(path.relative(DIST_DIR, resolvedAbsPath));
-      const mappedRelPath = manifest[resolvedRelPath];
-      if (!mappedRelPath) {
-        return fullMatch;
-      }
+      const relResolved = toPosix(path.relative(DIST_DIR, absResolved));
+      const mapped      = manifest[relResolved];
+      if (!mapped) return full;
 
-      const mappedAbsPath = path.join(DIST_DIR, mappedRelPath);
-
-      let nextTarget;
-      if (targetPath.startsWith('/')) {
-        nextTarget = `/${mappedRelPath}`;
+      const mappedAbs = path.join(DIST_DIR, mapped);
+      let next;
+      if (target.startsWith('/')) {
+        next = `/${mapped}`;
       } else {
-        const moduleRelative = toModuleRelativePath(fileDir, mappedAbsPath);
-        if (targetPath.startsWith('./') && !moduleRelative.startsWith('./') && !moduleRelative.startsWith('../')) {
-          nextTarget = `./${moduleRelative}`;
-        } else if (!targetPath.startsWith('./') && !targetPath.startsWith('../') && !targetPath.startsWith('/') && moduleRelative.startsWith('./')) {
-          nextTarget = moduleRelative.slice(2);
-        } else {
-          nextTarget = moduleRelative;
-        }
+        const mod = toModuleRelative(fileDir, mappedAbs);
+        if (target.startsWith('./') && !mod.startsWith('./') && !mod.startsWith('../')) next = `./${mod}`;
+        else if (!target.startsWith('./') && !target.startsWith('../') && !target.startsWith('/') && mod.startsWith('./')) next = mod.slice(2);
+        else next = mod;
       }
-
-      return `${quote}${nextTarget}${query || ''}${hash || ''}${quote}`;
+      return `${q}${next}${query}${hash}${q}`;
     });
 
-    if (rewritten !== original) {
-      fs.writeFileSync(filePath, rewritten, 'utf8');
-      rewrittenFiles += 1;
+    if (updated !== original) {
+      fs.writeFileSync(filePath, updated, 'utf8');
+      console.log(`  ${c(GRN, '↺')}  ${toPosix(path.relative(DIST_DIR, filePath))}`);
+      rewritten++;
     }
   }
 
-  console.log(`  Updated references in ${rewrittenFiles}/${targetFiles.length} file(s).`);
-  return { scannedFiles: targetFiles.length, rewrittenFiles };
+  return { scanned: targets.length, rewritten };
 }
 
-function runNpmScript(scriptName) {
-  const npmExecPath = process.env.npm_execpath;
-  const command = npmExecPath ? process.execPath : process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const args = npmExecPath ? [npmExecPath, 'run', scriptName] : ['run', scriptName];
+// ── Main ─────────────────────────────────────────────────────────────────────
+async function main() {
+  const t0 = Date.now();
+  divider('Educheia Build');
+  if (SKIP_IMAGES) warn('--no-images: skipping image generation');
 
-  const result = spawnSync(command, args, {
-    stdio: 'inherit',
-    cwd: ROOT_DIR,
-    shell: !npmExecPath && process.platform === 'win32',
-  });
+  let stepN = 0;
+  const next = (title) => step(++stepN, TOTAL_STEPS - (SKIP_IMAGES ? 1 : 0), title);
 
-  if (result.error) {
-    throw result.error;
+  // ── 1. Images (optional) ──────────────────────────────────────────────────
+  if (!SKIP_IMAGES) {
+    const t = Date.now();
+    next('Generating responsive images');
+    runScript('build:images');
+    log(`Images done in ${elapsed(t)}`);
   }
 
-  if (result.status !== 0) {
-    throw new Error(`npm run ${scriptName} failed with exit code ${result.status}`);
-  }
-}
+  // ── 2. CSS ────────────────────────────────────────────────────────────────
+  const tCss = Date.now();
+  next('Building CSS');
+  runScript('build:css');
+  log(`CSS done in ${elapsed(tCss)}`);
 
-function cleanDist() {
-  fs.rmSync(DIST_DIR, { recursive: true, force: true });
-  fs.mkdirSync(DIST_DIR, { recursive: true });
-}
-
-function copyIfExists(relPath) {
-  const srcPath = path.join(ROOT_DIR, relPath);
-  const destPath = path.join(DIST_DIR, relPath);
-
-  if (!fs.existsSync(srcPath)) {
-    console.log(`  Skipped missing path: ${relPath}`);
-    return false;
-  }
-
-  fs.cpSync(srcPath, destPath, { recursive: true });
-  console.log(`  Copied ${relPath}`);
-  return true;
-}
-
-function copyBuiltCssOnly() {
-  const cssSourceDir = path.join(ROOT_DIR, 'css');
-  const cssDestDir = path.join(DIST_DIR, 'css');
-
-  if (!fs.existsSync(cssSourceDir)) {
-    console.log('  Skipped missing path: css');
-    return 0;
-  }
-
-  fs.mkdirSync(cssDestDir, { recursive: true });
-
-  const entries = fs.readdirSync(cssSourceDir, { withFileTypes: true });
-  let copiedCount = 0;
-  for (const entry of entries) {
-    if (!entry.isFile()) {
-      continue;
-    }
-
-    if (!entry.name.endsWith('.css') || entry.name.endsWith('.tailwind.css')) {
-      continue;
-    }
-
-    const srcFile = path.join(cssSourceDir, entry.name);
-    const destFile = path.join(cssDestDir, entry.name);
-    fs.copyFileSync(srcFile, destFile);
-    copiedCount += 1;
-  }
-
-  console.log(`  Copied ${copiedCount} compiled CSS file(s) to dist/css`);
-  return copiedCount;
-}
-
-function main() {
-  const startedAt = Date.now();
-  logHeader('Educheia Build');
-
-  logStep('Generating responsive images...');
-  runNpmScript('build:images');
-
-  logStep('Building CSS...');
-  runNpmScript('build:css');
-
-  logStep('Preparing dist artifact...');
+  // ── 3. Dist scaffold ──────────────────────────────────────────────────────
+  next('Preparing dist/');
   cleanDist();
+  const copiedPaths = copyItems();
+  const copiedCss   = copyBuiltCss();
 
-  let copiedPaths = 0;
-  for (const item of COPY_ITEMS) {
-    if (copyIfExists(item)) {
-      copiedPaths += 1;
-    }
-  }
-
-  logStep('Copying compiled CSS...');
-  const copiedCssFiles = copyBuiltCssOnly();
-
-  logStep('Fingerprinting static assets...');
+  // ── 4. Fingerprint ────────────────────────────────────────────────────────
+  const tFp = Date.now();
+  next('Fingerprinting assets');
   const manifest = fingerprintAssets();
+  log(`Fingerprinted ${Object.keys(manifest).length} asset(s) in ${elapsed(tFp)}`);
 
-  logStep('Rewriting asset references...');
-  const rewriteStats = rewriteAssetReferences(manifest);
+  // ── 5. Rewrite references ─────────────────────────────────────────────────
+  const tRw = Date.now();
+  next('Rewriting asset references');
+  const rw = rewriteReferences(manifest);
+  log(`Rewrote ${rw.rewritten}/${rw.scanned} file(s) in ${elapsed(tRw)}`);
 
-  const fingerprintedAssets = Object.keys(manifest).length;
-  const duration = formatDuration(Date.now() - startedAt);
-  logSummary([
-    `Copied paths: ${copiedPaths}/${COPY_ITEMS.length}`,
-    `Compiled CSS files copied: ${copiedCssFiles}`,
-    `Fingerprinted assets: ${fingerprintedAssets}`,
-    `Files with rewritten references: ${rewriteStats.rewrittenFiles}/${rewriteStats.scannedFiles}`,
-    `Duration: ${duration}`,
+  // ── Summary ───────────────────────────────────────────────────────────────
+  divider('Build Summary');
+  summary([
+    ['Copied paths',        `${copiedPaths}/${COPY_ITEMS.length}`],
+    ['Compiled CSS files',  String(copiedCss)],
+    ['Fingerprinted',       String(Object.keys(manifest).length)],
+    ['References rewritten', `${rw.rewritten}/${rw.scanned}`],
+    ['Total duration',      elapsed(t0)],
   ]);
+  console.log();
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(`Build failed: ${error.message || error}`);
-  process.exit(1);
-}
+main().catch((e) => { error(e.message || String(e)); process.exit(1); });
