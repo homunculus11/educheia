@@ -79,7 +79,7 @@
     <noscript>
         <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
     </noscript>
-    <link rel="preload" as="image" href="images/hero.webp" fetchpriority="high">
+    <link rel="preload" as="image" href="images/hero-w960.webp" imagesrcset="images/hero-w480.webp 480w, images/hero-w960.webp 960w" imagesizes="(max-width: 640px) 88vw, (max-width: 1100px) 44vw, 480px" fetchpriority="high">
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/index.css">
     <link rel="icon" href="images/favicon.ico" type="image/x-icon">
@@ -90,9 +90,9 @@
         <div class="header-left">
             <a href="/" class="logo-link">
                 <picture>
-                    <source srcset="images/logo-dark.webp" media="(prefers-color-scheme: light)">
-                    <source srcset="images/logo-light.webp" media="(prefers-color-scheme: dark)">
-                    <img id="header-logo" src="images/logo-light.webp" alt="Educheia Logo" width="220" height="54" decoding="async">
+                    <source srcset="images/logo-dark-h54.webp 1x, images/logo-dark-h108.webp 2x" media="(prefers-color-scheme: light)">
+                    <source srcset="images/logo-light-h54.webp 1x, images/logo-light-h108.webp 2x" media="(prefers-color-scheme: dark)">
+                    <img id="header-logo" src="images/logo-light-h54.webp" alt="Educheia Logo" width="179" height="54" decoding="async">
                 </picture>
             </a>
             
@@ -163,7 +163,7 @@
                 <div class="hero-visual">
                     <div class="hero-photo">
                         <div class="photo-glow"></div>
-                        <img src="images/hero.webp" alt="Elena Vorotneac" class="hero-image" width="1118" height="1693" fetchpriority="high" loading="eager" decoding="async">
+                        <img src="images/hero-w480.webp" srcset="images/hero-w480.webp 480w, images/hero-w960.webp 960w" sizes="(max-width: 640px) 88vw, (max-width: 1100px) 44vw, 480px" alt="Elena Vorotneac" class="hero-image" width="480" height="727" fetchpriority="high" loading="eager" decoding="async">
                         <div class="photo-ring"></div>
                     </div>
 
@@ -339,9 +339,9 @@
                 <div class="footer-brand">
                     <a href="/" class="footer-logo-link">
                         <picture>
-                            <source srcset="images/logo-dark.webp" media="(prefers-color-scheme: light)">
-                            <source srcset="images/logo-light.webp" media="(prefers-color-scheme: dark)">
-                            <img src="images/logo-light.webp" alt="Educheia Logo" class="footer-logo" width="220" height="64" loading="lazy" decoding="async">
+                            <source srcset="images/logo-dark-h64.webp 1x, images/logo-dark-h128.webp 2x" media="(prefers-color-scheme: light)">
+                            <source srcset="images/logo-light-h64.webp 1x, images/logo-light-h128.webp 2x" media="(prefers-color-scheme: dark)">
+                            <img src="images/logo-light-h64.webp" alt="Educheia Logo" class="footer-logo" width="212" height="64" loading="lazy" decoding="async">
                         </picture>
                     </a>
                     <p class="footer-tagline">Un podcast curajos despre educație, oameni și viitor.</p>

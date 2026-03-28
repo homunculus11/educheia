@@ -6,6 +6,7 @@
     "dev": "node ./scripts/dev.cjs",
     "run": "node ./scripts/dev-server.cjs --root dist --port 4173",
     "build": "node ./scripts/build.cjs",
+    "build:images": "node ./scripts/generate-responsive-images.cjs",
     "build:css": "node ./scripts/tailwind-auto.cjs build --concurrency 7",
     "watch:css": "node ./scripts/tailwind-auto.cjs watch"
   },
@@ -16,6 +17,7 @@
     "express": "^5.2.1",
     "firebase": "^12.9.0",
     "node-fetch": "^3.3.2",
+    "sharp": "^0.34.4",
     "url": "^0.11.4"
   }
 }

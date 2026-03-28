@@ -241,6 +241,9 @@ function main() {
   const startedAt = Date.now();
   logHeader('Educheia Build');
 
+  logStep('Generating responsive images...');
+  runNpmScript('build:images');
+
   logStep('Building CSS...');
   runNpmScript('build:css');
 
