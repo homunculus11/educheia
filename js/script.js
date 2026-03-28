@@ -228,7 +228,7 @@ const getEpisodes = async () => {
 	}
 
 	try {
-		const data = await fetchJsonWithTimeout('https://tekwill-serverless.orletchi-bogdan2009.workers.dev/episodes');
+		const data = await fetchJsonWithTimeout('https://api.educheia.md/episodes');
 		const fetchedAt = Date.now();
 		const items = Array.isArray(data?.items) ? data.items : [];
 
@@ -278,7 +278,7 @@ const getChannelStats = async () => {
 	}
 
 	try {
-		const data = await fetchJsonWithTimeout('https://tekwill-serverless.orletchi-bogdan2009.workers.dev/channel');
+		const data = await fetchJsonWithTimeout('https://api.educheia.md/channel');
 		const fetchedAt = Date.now();
 		const channelInfo = data?.channelInfo && typeof data.channelInfo === 'object' ? data.channelInfo : {};
 
