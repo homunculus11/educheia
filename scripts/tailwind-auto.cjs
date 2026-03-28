@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { spawn } = require('child_process');
 
 const ROOT_DIR = process.cwd();
@@ -37,6 +38,43 @@ function getSourceFiles() {
 
 function getOutputFile(sourceFile) {
   return sourceFile.replace(/\.tailwind\.css$/i, '.css');
+}
+
+function parsePositiveInteger(value) {
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function readOptionValue(args, optionNames) {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    for (const optionName of optionNames) {
+      if (arg === optionName) {
+        return args[index + 1];
+      }
+
+      if (arg.startsWith(`${optionName}=`)) {
+        return arg.slice(optionName.length + 1);
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function resolveBuildConcurrency(sourceCount, rawArgs = []) {
+  const fromArgs = parsePositiveInteger(readOptionValue(rawArgs, ['--concurrency', '--parallel', '-j']));
+  const fromEnv = parsePositiveInteger(process.env.TAILWIND_BUILD_CONCURRENCY);
+  const requested = fromArgs || fromEnv;
+
+  if (requested) {
+    return Math.min(requested, sourceCount);
+  }
+
+  const cpuCount = Array.isArray(os.cpus()) && os.cpus().length > 0 ? os.cpus().length : 1;
+  const defaultConcurrency = Math.max(1, cpuCount - 1);
+  return Math.min(defaultConcurrency, sourceCount);
 }
 
 function getTailwindCommand() {
@@ -85,12 +123,39 @@ async function buildAll() {
 
   console.log(`Found ${sources.length} source file(s).`);
 
-  for (const source of sources) {
-    const relSource = toPosixPath(path.relative(ROOT_DIR, source));
-    const relOutput = toPosixPath(path.relative(ROOT_DIR, getOutputFile(source)));
-    console.log(`Building ${relSource} -> ${relOutput}`);
-    await runTailwindOnce(source);
+  const rawArgs = process.argv.slice(3);
+  const concurrency = resolveBuildConcurrency(sources.length, rawArgs);
+  console.log(`Using ${concurrency} concurrent worker(s).`);
+
+  if (concurrency === 1) {
+    for (const source of sources) {
+      const relSource = toPosixPath(path.relative(ROOT_DIR, source));
+      const relOutput = toPosixPath(path.relative(ROOT_DIR, getOutputFile(source)));
+      console.log(`Building ${relSource} -> ${relOutput}`);
+      await runTailwindOnce(source);
+    }
+    return;
   }
+
+  let nextIndex = 0;
+  let completed = 0;
+
+  const runWorker = async (workerId) => {
+    while (nextIndex < sources.length) {
+      const source = sources[nextIndex];
+      nextIndex += 1;
+
+      const relSource = toPosixPath(path.relative(ROOT_DIR, source));
+      const relOutput = toPosixPath(path.relative(ROOT_DIR, getOutputFile(source)));
+      console.log(`[worker ${workerId}] Building ${relSource} -> ${relOutput}`);
+      await runTailwindOnce(source);
+      completed += 1;
+      console.log(`[worker ${workerId}] Completed ${completed}/${sources.length}`);
+    }
+  };
+
+  const workers = Array.from({ length: concurrency }, (_unused, index) => runWorker(index + 1));
+  await Promise.all(workers);
 }
 
 function startWatcherForFile(sourceFile) {
@@ -167,7 +232,7 @@ async function main() {
     return;
   }
 
-  console.error('Usage: node scripts/tailwind-auto.cjs <build|watch>');
+  console.error('Usage: node scripts/tailwind-auto.cjs <build|watch> [--concurrency <n>]');
   process.exit(1);
 }
 

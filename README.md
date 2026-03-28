@@ -40,6 +40,25 @@ npm run build:css
 ```
 
 This discovers all `*.tailwind.css` files in the workspace and compiles each one to a matching `.css` file (same path, same filename without `.tailwind`).
+By default, builds now run in parallel using multiple workers (roughly CPU cores minus one).
+
+You can control this when needed:
+
+```bash
+npm run build:css -- --concurrency 1
+```
+
+Or with env var:
+
+```bash
+TAILWIND_BUILD_CONCURRENCY=1 npm run build:css
+```
+
+PowerShell equivalent:
+
+```powershell
+$env:TAILWIND_BUILD_CONCURRENCY=1; npm run build:css
+```
 
 Examples:
 

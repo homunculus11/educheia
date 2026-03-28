@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node ./scripts/dev.cjs",
     "run": "node ./scripts/dev-server.cjs --root dist --port 4173",
-    "build": "node ./scripts/pages-build.cjs",
+    "build": "node ./scripts/build.cjs",
     "build:css": "node ./scripts/tailwind-auto.cjs build",
     "watch:css": "node ./scripts/tailwind-auto.cjs watch"
   },
