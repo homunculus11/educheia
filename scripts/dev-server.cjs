@@ -37,6 +37,7 @@ const ROUTE_MAP = {
   '/'         : 'index.html',
   '/episodes' : 'src/episodes.html',
   '/about'    : 'src/about.html',
+  '/forum'    : 'src/forum.html',
   '/login'    : 'src/login.html',
   '/register' : 'src/register.html',
   '/account'  : 'src/account.html',

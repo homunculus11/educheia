@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ro">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Forum Educheia: anunturi oficiale, discutii ale comunitatii, categorii tematice si comentarii moderate.">
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+    <meta name="author" content="Educheia">
+    <meta name="theme-color" content="#0f1524">
+    <meta name="format-detection" content="telephone=no">
+    <meta property="og:locale" content="ro_MD">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Educheia">
+    <meta property="og:title" content="Forum Educheia">
+    <meta property="og:description" content="Anunturi oficiale si threads noi ale comunitatii Educheia.">
+    <meta property="og:url" content="https://educheia.md/forum">
+    <meta property="og:image" content="https://educheia.md/images/logo-dark.webp">
+    <meta property="og:image:secure_url" content="https://educheia.md/images/logo-dark.webp">
+    <meta property="og:image:alt" content="Logo Educheia Podcast">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Forum Educheia">
+    <meta name="twitter:description" content="Anunturi oficiale si discutii ale comunitatii Educheia.">
+    <meta name="twitter:image" content="https://educheia.md/images/logo-dark.webp">
+    <link rel="canonical" href="https://educheia.md/forum">
+    <link rel="alternate" hreflang="ro-MD" href="https://educheia.md/forum">
+    <link rel="alternate" hreflang="x-default" href="https://educheia.md/forum">
+    <title>Forum Educheia | Comunitate, Anunturi, Dezbateri</title>
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@graph": [
+                {
+                    "@type": "CollectionPage",
+                    "@id": "https://educheia.md/forum#webpage",
+                    "url": "https://educheia.md/forum",
+                    "name": "Forum Educheia",
+                    "description": "Anunturi oficiale si discutii ale comunitatii Educheia.",
+                    "isPartOf": {
+                        "@id": "https://educheia.md/#website"
+                    },
+                    "inLanguage": "ro-MD"
+                },
+                {
+                    "@type": "WebSite",
+                    "@id": "https://educheia.md/#website",
+                    "url": "https://educheia.md/",
+                    "name": "Educheia",
+                    "inLanguage": "ro-MD"
+                },
+                {
+                    "@type": "BreadcrumbList",
+                    "itemListElement": [
+                        {
+                            "@type": "ListItem",
+                            "position": 1,
+                            "name": "Acasa",
+                            "item": "https://educheia.md/"
+                        },
+                        {
+                            "@type": "ListItem",
+                            "position": 2,
+                            "name": "Forum",
+                            "item": "https://educheia.md/forum"
+                        }
+                    ]
+                }
+            ]
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/forum.css">
+    <link rel="apple-touch-icon" sizes="180x180" href="../images/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../images/favicon-16x16.png">
+    <link rel="icon" href="../images/favicon.ico" sizes="any">
+    <link rel="manifest" href="../images/site.webmanifest">
+</head>
+
+<body data-theme="dark">
+    <nav class="site-header">
+        <div class="header-left">
+            <a href="/" class="logo-link">
+                <picture>
+                    <source srcset="../images/logo-dark-h54.webp 1x, ../images/logo-dark-h108.webp 2x" media="(prefers-color-scheme: light)">
+                    <source srcset="../images/logo-light-h54.webp 1x, ../images/logo-light-h108.webp 2x" media="(prefers-color-scheme: dark)">
+                    <img id="header-logo" src="../images/logo-light-h54.webp" alt="Educheia Logo" width="179" height="54" decoding="async">
+                </picture>
+            </a>
+
+            <button class="menu-toggle" type="button" aria-expanded="false" aria-label="Toggle navigation">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+
+        <div id="header-drawer" class="header-drawer">
+            <ul id="header-items" class="header-items">
+                <li><a href="/" class="header-item">Acasa</a></li>
+                <li><a href="/episodes" class="header-item">Toate Episoadele</a></li>
+                <li><a href="/about" class="header-item">Despre</a></li>
+                <li><a href="/forum" class="header-item active">Forum</a></li>
+            </ul>
+
+            <div id="header-btns" class="header-btns auth-pending">
+                <a href="/login" id="login-btn">Login</a>
+                <a href="/register" id="signup-btn">Signup</a>
+            </div>
+        </div>
+
+        <div class="header-overlay" aria-hidden="true"></div>
+    </nav>
+
+    <main class="forum-main">
+        <section class="forum-hero">
+            <div class="forum-hero-glow forum-hero-glow-a" aria-hidden="true"></div>
+            <div class="forum-hero-glow forum-hero-glow-b" aria-hidden="true"></div>
+
+            <div class="forum-hero-copy">
+                <p class="forum-kicker">Comunitatea Educheia</p>
+                <h1>Forum pentru idei, intrebari si anunturi oficiale</h1>
+                <p class="forum-lead">Citeste liber toate postarile. Conturile autentificate si verificate pot publica thread-uri si comentarii. Anunturile importante raman fixate sus, iar comunitatea merge in ritmul celor mai noi discutii.</p>
+                <div class="forum-hero-actions">
+                    <button type="button" class="forum-cta" data-scroll="#thread-composer">Scrie un thread</button>
+                    <button type="button" class="forum-cta forum-cta-ghost" data-scroll="#sticky-section">Vezi sticky admin</button>
+                </div>
+                <p id="forum-auth-status" class="forum-auth-status" role="status" aria-live="polite">Se verifica starea contului...</p>
+                <p id="forum-global-feedback" class="forum-global-feedback" role="status" aria-live="polite"></p>
+            </div>
+        </section>
+
+        <section class="forum-shell" aria-label="Structura forum">
+            <aside class="forum-sidebar" aria-label="Comenzi forum">
+                <article class="forum-panel forum-panel-search">
+                    <h2>Cauta in threads</h2>
+                    <label class="sr-only" for="forum-search-input">Cauta thread</label>
+                    <input id="forum-search-input" type="search" placeholder="Cauta dupa titlu, continut, autor..." autocomplete="off">
+
+                    <div class="forum-filter-grid">
+                        <div class="forum-field">
+                            <label for="forum-type-filter">Tip categorie</label>
+                            <select id="forum-type-filter">
+                                <option value="all">Toate</option>
+                                <option value="normal">Comunitate</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="forum-field">
+                            <label for="forum-category-filter">Categorie</label>
+                            <select id="forum-category-filter">
+                                <option value="all">Toate categoriile</option>
+                            </select>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="forum-panel forum-panel-categories">
+                    <div class="forum-panel-head">
+                        <h2>Categorii</h2>
+                        <button id="open-category-modal" type="button" class="forum-btn forum-btn-mini" hidden>Categorie noua</button>
+                    </div>
+                    <p class="forum-panel-note">Categorii normale: comunitate. Categorii admin: anunturi oficiale.</p>
+                    <div id="category-chip-list" class="category-chip-list" aria-live="polite"></div>
+                </article>
+
+                <article id="thread-composer" class="forum-panel forum-panel-compose">
+                    <div class="forum-panel-head">
+                        <h2>Thread nou</h2>
+                        <span id="thread-policy-pill" class="forum-pill">Verificare necesara</span>
+                    </div>
+                    <p id="thread-compose-note" class="forum-panel-note">Autentifica-te cu email verificat pentru a publica.</p>
+                    <form id="thread-form" class="forum-form" novalidate>
+                        <div class="forum-field">
+                            <label for="thread-title-input">Titlu</label>
+                            <input id="thread-title-input" type="text" maxlength="160" placeholder="Ex: Cum construim rutine mai bune pentru copii?" required>
+                        </div>
+
+                        <div class="forum-field">
+                            <label for="thread-body-input">Mesaj</label>
+                            <textarea id="thread-body-input" rows="6" maxlength="8000" placeholder="Descrie contextul, ce ai incercat si ce raspuns cauti..." required></textarea>
+                        </div>
+
+                        <div class="forum-field">
+                            <label for="thread-category-select">Categorie</label>
+                            <select id="thread-category-select" required></select>
+                        </div>
+
+                        <label id="sticky-toggle-wrap" class="forum-toggle" hidden>
+                            <input id="thread-sticky-toggle" type="checkbox">
+                            <span>Fixeaza acest thread in sectiunea sticky (doar admin)</span>
+                        </label>
+
+                        <div class="forum-form-foot">
+                            <span id="thread-rate-hint" class="forum-rate-hint">Ritmul publicarii este limitat pentru protectie anti-abuz.</span>
+                            <button id="thread-submit-btn" type="submit" class="forum-btn">Publica thread</button>
+                        </div>
+                    </form>
+                </article>
+            </aside>
+
+            <section class="forum-feed" aria-label="Flux forum">
+                <article id="sticky-section" class="forum-stream sticky-stream">
+                    <header class="stream-head">
+                        <div>
+                            <p class="stream-kicker">Sticky section</p>
+                            <h2>Anunturi oficiale admin</h2>
+                        </div>
+                        <span class="stream-badge">Prioritare</span>
+                    </header>
+                    <div id="sticky-threads-list" class="thread-list" aria-live="polite"></div>
+                </article>
+
+                <article class="forum-stream community-stream">
+                    <header class="stream-head">
+                        <div>
+                            <p class="stream-kicker">Comunitate</p>
+                            <h2>Threads noi - ordonate de la nou la vechi</h2>
+                        </div>
+                        <button id="refresh-threads-btn" type="button" class="forum-btn forum-btn-mini forum-btn-ghost">Refresh</button>
+                    </header>
+                    <div id="community-threads-list" class="thread-list" aria-live="polite"></div>
+                </article>
+            </section>
+
+            <aside class="thread-view" aria-label="Thread selectat">
+                <article class="forum-panel thread-focus-panel">
+                    <div id="selected-thread-empty" class="thread-empty-state">
+                        <p>Selecteaza un thread din lista pentru a vedea discutia completa si comentariile.</p>
+                    </div>
+
+                    <div id="selected-thread-shell" hidden>
+                        <header class="thread-focus-head">
+                            <div class="thread-focus-badges">
+                                <span id="selected-thread-category" class="forum-pill">Categorie</span>
+                                <span id="selected-thread-status" class="forum-pill forum-pill-muted">vizibil</span>
+                            </div>
+                            <h3 id="selected-thread-title">Titlu thread</h3>
+                            <p id="selected-thread-meta" class="thread-focus-meta"></p>
+                        </header>
+
+                        <div class="thread-focus-controls">
+                            <button id="selected-delete-thread-btn" type="button" class="forum-btn forum-btn-mini forum-btn-danger" hidden>Sterge thread</button>
+                            <button id="selected-lock-thread-btn" type="button" class="forum-btn forum-btn-mini" hidden>Blocheaza thread</button>
+                            <button id="selected-toggle-visibility-btn" type="button" class="forum-btn forum-btn-mini" hidden>Ascunde thread</button>
+                            <button id="selected-restrict-user-btn" type="button" class="forum-btn forum-btn-mini forum-btn-ghost" hidden>Restrange autor</button>
+                        </div>
+
+                        <article id="selected-thread-body" class="thread-focus-body"></article>
+                    </div>
+                </article>
+
+                <article class="forum-panel comments-panel">
+                    <header class="comments-head">
+                        <h2>Comentarii</h2>
+                        <span id="comments-count" class="comments-count">0</span>
+                    </header>
+
+                    <p id="comments-status" class="comments-status" role="status" aria-live="polite">Alege un thread pentru a incarca comentariile.</p>
+                    <ul id="comments-list" class="comments-list" aria-live="polite"></ul>
+
+                    <form id="comment-form" class="forum-form comment-form" novalidate>
+                        <div class="forum-field">
+                            <label for="comment-input">Raspunde in thread</label>
+                            <textarea id="comment-input" rows="4" maxlength="1500" placeholder="Adauga un raspuns clar si respectuos..." required></textarea>
+                        </div>
+                        <div class="forum-form-foot">
+                            <span id="comment-compose-note" class="forum-rate-hint">Trebuie sa fii autentificat cu email verificat pentru comentarii.</span>
+                            <button id="comment-submit-btn" type="submit" class="forum-btn">Trimite comentariu</button>
+                        </div>
+                    </form>
+                </article>
+            </aside>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-inner">
+            <div class="footer-top">
+                <div class="footer-brand">
+                    <a href="/" class="footer-logo-link">
+                        <picture>
+                            <source srcset="../images/logo-dark-h64.webp 1x, ../images/logo-dark-h128.webp 2x" media="(prefers-color-scheme: light)">
+                            <source srcset="../images/logo-light-h64.webp 1x, ../images/logo-light-h128.webp 2x" media="(prefers-color-scheme: dark)">
+                            <img src="../images/logo-light-h64.webp" alt="Educheia Logo" class="footer-logo" width="212" height="64" loading="lazy" decoding="async">
+                        </picture>
+                    </a>
+                    <p class="footer-tagline">Un podcast curajos despre educatie, oameni si viitor.</p>
+                </div>
+
+                <nav class="footer-nav" aria-label="Footer navigation">
+                    <div class="footer-nav-group">
+                        <h2 class="footer-nav-title">Navigare</h2>
+                        <ul class="footer-nav-list">
+                            <li><a href="/" class="footer-link">Acasa</a></li>
+                            <li><a href="/episodes" class="footer-link">Toate Episoadele</a></li>
+                            <li><a href="/about" class="footer-link">Despre</a></li>
+                            <li><a href="/forum" class="footer-link">Forum</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="footer-nav-group">
+                        <h2 class="footer-nav-title">Cont</h2>
+                        <ul class="footer-nav-list">
+                            <li><a href="/login" class="footer-link">Login</a></li>
+                            <li><a href="/register" class="footer-link">Signup</a></li>
+                        </ul>
+                    </div>
+                </nav>
+
+                <div class="footer-social">
+                    <h2 class="footer-nav-title">Urmareste-ne</h2>
+                    <div class="footer-social-links">
+                        <a href="https://www.youtube.com/@elenavorotneac" class="footer-social-btn" aria-label="YouTube">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                        </a>
+                        <a href="https://t.me/educheia" class="footer-social-btn" aria-label="Telegram">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9.036 15.803 8.66 21.09c.538 0 .77-.231 1.05-.508l2.52-2.408 5.222 3.825c.958.528 1.636.25 1.894-.883l3.433-16.086h.001c.304-1.42-.513-1.976-1.447-1.628L1.46 11.012c-1.357.528-1.337 1.286-.231 1.628l5.09 1.586L18.14 6.83c.556-.368 1.062-.165.646.203"/></svg>
+                        </a>
+                        <a href="https://www.facebook.com/educheia" class="footer-social-btn" aria-label="Facebook">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-divider"></div>
+
+            <div class="footer-bottom">
+                <p class="footer-copy">&copy; 2026 Educheia. Toate drepturile rezervate.</p>
+                <p class="footer-credit">Facut de Orletchi Bogdan si Macari Nicolae</p>
+            </div>
+        </div>
+    </footer>
+
+    <div id="category-modal" class="forum-modal" hidden>
+        <div class="forum-modal-backdrop" data-close-modal="category"></div>
+        <div class="forum-modal-card" role="dialog" aria-modal="true" aria-labelledby="category-modal-title">
+            <button type="button" class="forum-modal-close" id="close-category-modal" aria-label="Inchide">&times;</button>
+            <h2 id="category-modal-title">Categorie noua</h2>
+            <p class="forum-modal-note">Doar admin sau utilizatorii de incredere pot crea categorii.</p>
+            <form id="category-form" class="forum-form" novalidate>
+                <div class="forum-field">
+                    <label for="category-name-input">Nume categorie</label>
+                    <input id="category-name-input" type="text" maxlength="70" placeholder="Ex: Parenting, Scoala, AI in educatie" required>
+                </div>
+                <div class="forum-field">
+                    <label for="category-slug-input">Slug</label>
+                    <input id="category-slug-input" type="text" maxlength="70" placeholder="ex-parenting" required>
+                </div>
+                <div class="forum-field">
+                    <label for="category-description-input">Descriere</label>
+                    <textarea id="category-description-input" rows="3" maxlength="280" placeholder="Descriere scurta pentru filtrare si context"></textarea>
+                </div>
+                <div class="forum-field">
+                    <label for="category-type-select">Tip categorie</label>
+                    <select id="category-type-select">
+                        <option value="normal">Normala (comunitate)</option>
+                        <option value="admin">Admin (anunturi oficiale)</option>
+                    </select>
+                </div>
+                <p id="category-form-feedback" class="forum-modal-feedback" role="status" aria-live="polite"></p>
+                <div class="forum-modal-actions">
+                    <button type="button" class="forum-btn forum-btn-ghost" data-close-modal="category">Renunta</button>
+                    <button id="category-submit-btn" type="submit" class="forum-btn">Creeaza categorie</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="moderation-modal" class="forum-modal" hidden>
+        <div class="forum-modal-backdrop" data-close-modal="moderation"></div>
+        <div class="forum-modal-card" role="dialog" aria-modal="true" aria-labelledby="moderation-modal-title">
+            <button type="button" class="forum-modal-close" id="close-moderation-modal" aria-label="Inchide">&times;</button>
+            <h2 id="moderation-modal-title">Moderare utilizator</h2>
+            <p id="moderation-target-label" class="forum-modal-note">Tinta moderare: -</p>
+
+            <form id="moderation-form" class="forum-form" novalidate>
+                <input id="moderation-target-uid" type="hidden">
+
+                <label class="forum-toggle">
+                    <input id="restrict-threads-checkbox" type="checkbox" checked>
+                    <span>Restrictioneaza creare thread-uri</span>
+                </label>
+
+                <label class="forum-toggle">
+                    <input id="restrict-comments-checkbox" type="checkbox" checked>
+                    <span>Restrictioneaza comentarii</span>
+                </label>
+
+                <label class="forum-toggle">
+                    <input id="ban-user-checkbox" type="checkbox">
+                    <span>Baneaza utilizatorul</span>
+                </label>
+
+                <div class="forum-field">
+                    <label for="restriction-duration-select">Durata</label>
+                    <select id="restriction-duration-select">
+                        <option value="1h">1 ora</option>
+                        <option value="24h">24 ore</option>
+                        <option value="7d" selected>7 zile</option>
+                        <option value="30d">30 zile</option>
+                        <option value="indefinite">Nedefinit</option>
+                    </select>
+                </div>
+
+                <label class="forum-toggle">
+                    <input id="purge-user-content-checkbox" type="checkbox">
+                    <span>Sterge toate thread-urile si comentariile utilizatorului</span>
+                </label>
+
+                <div class="forum-field">
+                    <label for="moderation-reason-input">Motiv</label>
+                    <textarea id="moderation-reason-input" rows="3" maxlength="300" placeholder="Ex: spam repetat, limbaj abuziv, phishing"></textarea>
+                </div>
+
+                <p id="moderation-feedback" class="forum-modal-feedback" role="status" aria-live="polite"></p>
+
+                <div class="forum-modal-actions">
+                    <button type="button" class="forum-btn forum-btn-ghost" data-close-modal="moderation">Renunta</button>
+                    <button id="moderation-submit-btn" type="submit" class="forum-btn forum-btn-danger">Aplica moderare</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="../js/script.js"></script>
+    <script type="module" src="../js/forum.js"></script>
+    <script type="module">
+        const loadAccountNav = () => import('../js/account-nav.js').catch(() => null);
+        if ('requestIdleCallback' in window) {
+            window.requestIdleCallback(loadAccountNav, { timeout: 1800 });
+        } else {
+            window.addEventListener('load', () => setTimeout(loadAccountNav, 550), { once: true });
+        }
+    </script>
+</body>
+
+</html>
