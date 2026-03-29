@@ -50,18 +50,151 @@ function parseConcurrency(sources, rawArgs) {
   return Math.min(Math.max(1, cpus - 1), sources.length);
 }
 
-function tailwindCmd(src, out, watch = false) {
+function tailwindCmd(src, out, options = {}) {
+  const { watch = false, poll = false } = options;
   const cli  = require.resolve('tailwindcss/lib/cli.js');
-  const args = [cli, '-i', src, '-o', out, watch ? '--watch' : '--minify'];
+  const args = [cli, '-i', src, '-o', out];
+
+  if (watch) {
+    // "always" prevents watch mode from exiting when stdin is not interactive.
+    args.push('--watch=always');
+    if (poll) args.push('--poll');
+  } else {
+    args.push('--minify');
+  }
+
   return { bin: process.execPath, args };
+}
+
+function parseWatchOptions(rawArgs) {
+  const pollArg = rawArgs.includes('--poll');
+  const pollEnv = /^(1|true|yes)$/i.test(String(process.env.TAILWIND_WATCH_POLL || ''));
+  return { poll: pollArg || pollEnv };
+}
+
+function createLineScanner(onLine) {
+  let buffer = '';
+
+  const push = (chunk) => {
+    buffer += chunk.toString('utf8');
+    let nl;
+    while ((nl = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, nl).replace(/\r$/, '');
+      buffer = buffer.slice(nl + 1);
+      onLine(line);
+    }
+  };
+
+  const flush = () => {
+    const line = buffer.trim();
+    if (line) onLine(line);
+    buffer = '';
+  };
+
+  return { push, flush };
+}
+
+const stripAnsi = (s) => String(s || '').replace(/\x1B\[[0-9;]*m/g, '');
+
+function isSuppressedTailwindLine(cleanLine) {
+  return cleanLine.includes('browserslist: caniuse-lite is outdated')
+      || cleanLine.includes('update-browserslist-db@latest')
+      || cleanLine.includes('why you should do it regularly');
+}
+
+function classifyTailwindLine(line) {
+  const cleanLine = stripAnsi(line).toLowerCase();
+
+  if (!cleanLine) return { type: 'ignore', cleanLine };
+  if (isSuppressedTailwindLine(cleanLine)) return { type: 'ignore', cleanLine };
+  if (/^done in\s+\d+(?:\.\d+)?m?s\.?$/i.test(cleanLine)) return { type: 'done', cleanLine };
+  if (/\brebuild(?:ing)?\b/i.test(cleanLine)) return { type: 'rebuild', cleanLine };
+  if (/\berror\b|\berr!\b/i.test(cleanLine)) return { type: 'error', cleanLine };
+  if (/\bwarn(?:ing)?\b/i.test(cleanLine)) return { type: 'warn', cleanLine };
+  return { type: 'other', cleanLine };
+}
+
+function attachBuildOutputHandlers(child, src) {
+  const srcRel = rel(src);
+
+  const onLine = (rawLine) => {
+    const line = String(rawLine || '').trim();
+    if (!line) return;
+
+    const parsed = classifyTailwindLine(line);
+
+    if (parsed.type === 'ignore' || parsed.type === 'done' || parsed.type === 'rebuild' || parsed.type === 'other') return;
+    if (parsed.type === 'warn') { warn(`[${srcRel}] ${line}`); return; }
+    if (parsed.type === 'error') { error(`[${srcRel}] ${line}`); }
+  };
+
+  const stdout = createLineScanner(onLine);
+  const stderr = createLineScanner(onLine);
+
+  child.stdout.on('data', stdout.push);
+  child.stderr.on('data', stderr.push);
+  child.stdout.on('end', stdout.flush);
+  child.stderr.on('end', stderr.flush);
+}
+
+function attachWatchOutputHandlers(child, src, out) {
+  let bootstrapping   = true;
+  let rebuildAnnounced = false;
+  const srcRel = rel(src);
+  const outRel = rel(out);
+
+  const onLine = (rawLine) => {
+    const line = String(rawLine || '').trim();
+    if (!line) return;
+
+    const parsed = classifyTailwindLine(line);
+    if (parsed.type === 'ignore') return;
+
+    if (parsed.type === 'done') {
+      if (bootstrapping) bootstrapping = false;
+      rebuildAnnounced = false;
+      return;
+    }
+
+    if (parsed.type === 'rebuild') {
+      if (bootstrapping) return;
+      if (!rebuildAnnounced) {
+        info(`Change detected: ${c(D, srcRel)} → building ${c(D, outRel)}`);
+        rebuildAnnounced = true;
+      }
+      return;
+    }
+
+    if (parsed.type === 'warn') {
+      warn(`[${srcRel}] ${line}`);
+      return;
+    }
+
+    if (parsed.type === 'error') {
+      error(`[${srcRel}] ${line}`);
+      return;
+    }
+
+    // Keep unexpected lines visible while still suppressing Tailwind timing noise.
+    info(`[${srcRel}] ${line}`);
+  };
+
+  const stdout = createLineScanner(onLine);
+  const stderr = createLineScanner(onLine);
+
+  child.stdout.on('data', stdout.push);
+  child.stderr.on('data', stderr.push);
+  child.stdout.on('end', stdout.flush);
+  child.stderr.on('end', stderr.flush);
 }
 
 // ── Build ─────────────────────────────────────────────────────────────────────
 function buildOne(src, label) {
   return new Promise((resolve, reject) => {
     const out       = outputFor(src);
-    const { bin, args } = tailwindCmd(src, out, false);
-    const child     = spawn(bin, args, { stdio: 'inherit' });
+    const { bin, args } = tailwindCmd(src, out, { watch: false });
+    const child     = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    attachBuildOutputHandlers(child, src);
     child.on('error', reject);
     child.on('exit', (code) => {
       code === 0
@@ -95,7 +228,7 @@ async function buildAll(rawArgs) {
       await buildOne(src, label);
 
       completed++;
-      console.log(`  ${c(GRN, '✔')}  [${String(completed).padStart(String(totalSteps).length)}/${totalSteps}]  ${c(D, rel(src))}  ${c(D, elapsed(tFile))}`);
+      log(`[${String(completed).padStart(String(totalSteps).length)}/${totalSteps}] built ${c(D, rel(src))} in ${c(D, elapsed(tFile))}`);
     }
   };
 
@@ -106,32 +239,57 @@ async function buildAll(rawArgs) {
 }
 
 // ── Watch ─────────────────────────────────────────────────────────────────────
-function watchFile(src) {
+function watchFile(src, watchOptions) {
   const out       = outputFor(src);
-  const { bin, args } = tailwindCmd(src, out, true);
+  const { bin, args } = tailwindCmd(src, out, { watch: true, poll: watchOptions.poll });
   info(`Watching ${c(D, rel(src))} → ${c(D, rel(out))}`);
 
-  const child = spawn(bin, args, { stdio: 'inherit' });
+  const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  attachWatchOutputHandlers(child, src, out);
   child.on('error', (err) => error(`Watcher error [${rel(src)}]: ${err.message}`));
   return child;
 }
 
-function watchAll() {
+function watchAll(rawArgs) {
   divider('Tailwind CSS Watch');
+  const watchOptions = parseWatchOptions(rawArgs);
+  if (watchOptions.poll) info(`Watch mode ${c(B, 'polling')} enabled`);
+
   const watchers = new Map();
+  let stopping   = false;
+
+  const startWatcher = (src) => {
+    const child = watchFile(src, watchOptions);
+    watchers.set(src, child);
+
+    child.on('exit', (code, signal) => {
+      const stillTracked = watchers.get(src) === child;
+      const expectedStop = stopping || !stillTracked || signal === 'SIGTERM';
+      if (expectedStop) return;
+
+      const reason = signal ? `signal ${signal}` : `code ${code}`;
+      warn(`Watcher exited [${rel(src)}] with ${reason}; restarting…`);
+
+      setTimeout(() => {
+        if (stopping) return;
+        if (watchers.get(src) !== child) return;
+        startWatcher(src);
+      }, 400);
+    });
+  };
 
   const sync = () => {
     const current = new Set(getSources());
 
     for (const src of current) {
-      if (!watchers.has(src)) watchers.set(src, watchFile(src));
+      if (!watchers.has(src)) startWatcher(src);
     }
 
     for (const [src, child] of watchers) {
       if (!current.has(src)) {
         info(`Stopping watcher: ${rel(src)}`);
-        child.kill('SIGTERM');
         watchers.delete(src);
+        child.kill('SIGTERM');
       }
     }
 
@@ -142,8 +300,13 @@ function watchAll() {
   const id = setInterval(sync, 2_000);
 
   const quit = () => {
+    if (stopping) return;
+    stopping = true;
     clearInterval(id);
-    for (const child of watchers.values()) child.kill('SIGTERM');
+    for (const [src, child] of watchers) {
+      watchers.delete(src);
+      child.kill('SIGTERM');
+    }
     process.exit(0);
   };
   process.on('SIGINT', quit);
@@ -155,9 +318,9 @@ async function main() {
   const [,, mode, ...rawArgs] = process.argv;
 
   if (mode === 'build') { await buildAll(rawArgs); return; }
-  if (mode === 'watch') { watchAll(); return; }
+  if (mode === 'watch') { watchAll(rawArgs); return; }
 
-  error('Usage: node scripts/tailwind-auto.cjs <build|watch> [--concurrency <n>]');
+  error('Usage: node scripts/tailwind-auto.cjs <build|watch> [--concurrency <n>] [--poll]');
   process.exit(1);
 }
 
