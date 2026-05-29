@@ -1,8 +1,16 @@
 body {
   @apply m-0 min-h-screen p-0 font-['Manrope',system-ui,-apple-system,sans-serif] text-[17px] leading-[1.6] text-text-main;
   background:
-    radial-gradient(circle at 9% 11%, rgba(109, 186, 198, 0.16), transparent 34%),
-    radial-gradient(circle at 84% 6%, rgba(122, 152, 214, 0.12), transparent 30%),
+    radial-gradient(
+      circle at 9% 11%,
+      rgba(109, 186, 198, 0.16),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 84% 6%,
+      rgba(122, 152, 214, 0.12),
+      transparent 30%
+    ),
     linear-gradient(180deg, #0f1524 0%, #0e1627 58%, #0d1522 100%);
 }
 
@@ -28,9 +36,13 @@ h4 {
 }
 
 .forum-main::before {
-  content: '';
+  content: "";
   @apply pointer-events-none absolute left-0 right-0 top-[-132px] h-[772px];
-  background: linear-gradient(180deg, rgba(98, 156, 208, 0.12) 0%, rgba(13, 21, 34, 0) 80%);
+  background: linear-gradient(
+    180deg,
+    rgba(98, 156, 208, 0.12) 0%,
+    rgba(13, 21, 34, 0) 80%
+  );
 }
 
 .forum-top-grid {
@@ -47,7 +59,7 @@ h4 {
 }
 
 .forum-hero {
-  @apply relative overflow-hidden pb-8 pt-[104px];
+  @apply relative overflow-visible pb-5 pt-[56px];
 }
 
 .forum-grid-overlay {
@@ -60,40 +72,52 @@ h4 {
 }
 
 .forum-hero-inner {
-  @apply grid items-start gap-8 rounded-[26px] border border-white/10 bg-[linear-gradient(165deg,rgba(19,30,49,0.84),rgba(14,23,40,0.94))] px-[clamp(1.1rem,2vw,2.2rem)] py-[clamp(1.2rem,2vw,2.4rem)] shadow-[0_26px_58px_rgba(4,9,18,0.42)] backdrop-blur-xl;
-  grid-template-columns: minmax(0, 1fr) auto;
+  @apply relative grid items-end gap-6 px-0 py-0;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+}
+
+.forum-hero-inner::after {
+  content: "";
+  @apply pointer-events-none absolute -bottom-[2px] left-0 right-0 h-px;
+  background: linear-gradient(
+    90deg,
+    rgba(138, 160, 194, 0) 0%,
+    rgba(138, 160, 194, 0.42) 18%,
+    rgba(109, 186, 198, 0.5) 54%,
+    rgba(138, 160, 194, 0) 100%
+  );
+}
+
+.forum-hero-copy {
+  @apply pb-4;
 }
 
 .forum-kicker {
-  @apply m-0 inline-flex w-fit items-center rounded-full border border-[#90b6de5f] bg-[#1a2a45a8] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-[#d6e7ff];
+  @apply m-0 inline-flex w-fit items-center rounded-none border-0 bg-transparent px-0 py-0 text-[11px] font-bold uppercase tracking-[0.18em] text-[#9fcbd8];
 }
 
 .forum-hero-copy h1 {
-  @apply mb-0 mt-3 text-[clamp(2rem,4.4vw,3.5rem)] font-bold leading-[1.02] text-[#f2f7ff];
+  @apply mb-0 mt-2 text-[clamp(1.95rem,4.1vw,3.25rem)] font-bold leading-[1.04] text-[#f2f7ff];
 }
 
 .forum-lead {
-  @apply mb-0 mt-4 max-w-[62ch] text-[1.03rem] text-[#c7d6ea];
+  @apply mb-0 mt-3 max-w-[64ch] text-[1.02rem] text-[#c7d6ea];
 }
 
 .forum-meta-row {
-  @apply mt-5 flex flex-wrap gap-2;
+  @apply mt-4 flex flex-wrap gap-2;
 }
 
 .forum-meta-pill {
-  @apply inline-flex items-center rounded-full border border-[#8aa4c430] bg-[#192741a8] px-3 py-[7px] text-xs font-semibold text-[#d3e2f7];
+  @apply inline-flex items-center rounded-xl border border-[#8aa4c430] bg-[#15253e87] px-3 py-[7px] text-xs font-semibold text-[#d3e2f7];
 }
 
 .forum-hero-actions {
-  @apply flex min-w-[220px] flex-col items-stretch gap-3;
+  @apply flex min-w-0 max-w-[280px] self-end items-stretch justify-end pb-4;
 }
 
 .forum-create-btn {
   @apply w-full justify-center;
-}
-
-.forum-create-help {
-  @apply m-0 text-sm leading-relaxed text-[#aebed5];
 }
 
 .forum-content {
@@ -197,7 +221,11 @@ h4 {
 .forum-chip.is-active {
   border-color: rgba(143, 214, 223, 0.86);
   color: #f4fbff;
-  background: linear-gradient(135deg, rgba(73, 136, 155, 0.38), rgba(74, 120, 162, 0.36));
+  background: linear-gradient(
+    135deg,
+    rgba(73, 136, 155, 0.38),
+    rgba(74, 120, 162, 0.36)
+  );
   box-shadow: 0 0 0 2px rgba(143, 214, 223, 0.14);
 }
 
@@ -223,7 +251,11 @@ h4 {
 
 .forum-thread-link:hover {
   @apply -translate-y-px border-[#92d6de8c];
-  background: linear-gradient(155deg, rgba(32, 54, 82, 0.84), rgba(25, 43, 70, 0.84));
+  background: linear-gradient(
+    155deg,
+    rgba(32, 54, 82, 0.84),
+    rgba(25, 43, 70, 0.84)
+  );
   box-shadow: 0 14px 30px rgba(6, 12, 22, 0.34);
 }
 
@@ -288,9 +320,14 @@ h4 {
 }
 
 .forum-thread-skeleton::after {
-  content: '';
+  content: "";
   @apply absolute inset-0;
-  background: linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0.08) 46%, transparent 100%);
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 46%,
+    transparent 100%
+  );
   background-size: 220% 100%;
   animation: shimmer 1.7s linear infinite;
 }
@@ -319,7 +356,7 @@ h4 {
 }
 
 .forum-sidebar {
-  @apply sticky top-[102px] flex flex-col gap-4;
+  @apply sticky top-[126px] flex flex-col gap-4;
 }
 
 .forum-side-card {
@@ -383,7 +420,7 @@ h4 {
   @apply inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-[#d6e5f7];
 }
 
-.forum-sticky-label input[type='checkbox'] {
+.forum-sticky-label input[type="checkbox"] {
   @apply h-4 w-4 rounded border border-[#95b0cc66] bg-[#10203a];
   accent-color: var(--color-primary);
 }
@@ -398,10 +435,30 @@ h4 {
 
 .forum-modal-backdrop {
   @apply absolute inset-0 bg-black/70 backdrop-blur-sm;
+  opacity: 0;
+  transition: opacity 180ms ease;
 }
 
 .forum-modal-panel {
   @apply relative z-[1] w-full max-w-[680px] rounded-[24px] border border-[#8ca7c54a] bg-[linear-gradient(160deg,rgba(22,34,56,0.96),rgba(16,27,45,0.98))] px-[clamp(1rem,2vw,1.5rem)] py-[clamp(1rem,2vw,1.4rem)] shadow-[0_24px_64px_rgba(0,0,0,0.5)];
+  opacity: 0;
+  transform: translateY(8px) scale(0.985);
+  transition:
+    opacity 190ms ease,
+    transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.forum-modal.is-open .forum-modal-backdrop {
+  opacity: 1;
+}
+
+.forum-modal.is-open .forum-modal-panel {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.forum-modal.is-closing {
+  pointer-events: none;
 }
 
 .forum-modal-close {
@@ -478,6 +535,7 @@ h4 {
 
 body.modal-open {
   @apply overflow-hidden;
+  padding-right: var(--modal-scrollbar-gap, 0px);
 }
 
 .forum-placeholder-main {
@@ -524,7 +582,7 @@ body.modal-open {
   }
 
   .forum-hero-actions {
-    @apply min-w-0;
+    @apply max-w-none self-auto items-start pb-0;
   }
 
   .forum-content-grid {
@@ -542,7 +600,7 @@ body.modal-open {
   }
 
   .forum-hero {
-    @apply pt-[94px];
+    @apply pt-[70px];
   }
 
   .forum-toolbar {
@@ -567,7 +625,6 @@ body.modal-open {
 }
 
 @media (max-width: 640px) {
-  .forum-hero-inner,
   .forum-block,
   .forum-side-card {
     @apply rounded-[18px];
