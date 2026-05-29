@@ -9,19 +9,30 @@
     <meta name="author" content="Educheia">
     <meta name="theme-color" content="#0f1524">
     <title>Subiect Forum | În curând</title>
+    <script>
+        document.documentElement.setAttribute("data-thread-canonical-pending", "true");
+        window.setTimeout(function () {
+            document.documentElement.removeAttribute("data-thread-canonical-pending");
+        }, 3200);
+    </script>
+    <style>
+        html[data-thread-canonical-pending] body {
+            visibility: hidden;
+        }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript>
         <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
     </noscript>
-    <link rel="stylesheet" href="../css/styles.css">
-    <link rel="stylesheet" href="../css/forum.css">
-    <link rel="apple-touch-icon" sizes="180x180" href="../images/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="../images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="../images/favicon-16x16.png">
-    <link rel="icon" href="../images/favicon.ico" sizes="any">
-    <link rel="manifest" href="../images/site.webmanifest">
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/forum.css">
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+    <link rel="icon" href="/images/favicon.ico" sizes="any">
+    <link rel="manifest" href="/images/site.webmanifest">
 </head>
 
 <body data-theme="dark">
@@ -29,9 +40,9 @@
         <div class="header-left">
             <a href="/" class="logo-link">
                 <picture>
-                    <source srcset="../images/logo-dark-h54.webp 1x, ../images/logo-dark-h108.webp 2x" media="(prefers-color-scheme: light)">
-                    <source srcset="../images/logo-light-h54.webp 1x, ../images/logo-light-h108.webp 2x" media="(prefers-color-scheme: dark)">
-                    <img id="header-logo" src="../images/logo-light-h54.webp" alt="Educheia Logo" width="179" height="54" decoding="async">
+                    <source srcset="/images/logo-dark-h54.webp 1x, /images/logo-dark-h108.webp 2x" media="(prefers-color-scheme: light)">
+                    <source srcset="/images/logo-light-h54.webp 1x, /images/logo-light-h108.webp 2x" media="(prefers-color-scheme: dark)">
+                    <img id="header-logo" src="/images/logo-light-h54.webp" alt="Educheia Logo" width="179" height="54" decoding="async">
                 </picture>
             </a>
 
@@ -82,18 +93,9 @@
         </div>
     </footer>
 
-    <script>
-        (function () {
-            const target = document.getElementById('placeholder-thread-id');
-            if (!target) return;
-            const params = new URLSearchParams(window.location.search);
-            const tid = (params.get('tid') || '').trim();
-            if (!tid) return;
-            target.textContent = `ID subiect: ${tid}`;
-        })();
-    </script>
-    <script src="../js/script.js"></script>
-    <script type="module" src="../js/account-nav.js"></script>
+    <script src="/js/script.js"></script>
+    <script type="module" src="/js/forum-thread.js"></script>
+    <script type="module" src="/js/account-nav.js"></script>
 </body>
 
 </html>

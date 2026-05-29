@@ -15,8 +15,11 @@ import {
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 const AUTH_RETURN_KEY = "authReturnTo";
-const PAGE_SIZE = 14;
+const PAGE_SIZE = 5;
 const STICKY_LIMIT = 8;
+const MAX_VISIBLE_CATEGORY_CHIPS = 6;
+const FEED_AUTOLOAD_MARGIN_PX = 240;
+const FEED_AUTOLOAD_DELAY_MS = 160;
 const MODAL_TRANSITION_MS = 220;
 const THREADS_COLLECTION = "forumThreads";
 const CATEGORIES_COLLECTION = "forumCategories";
@@ -51,6 +54,8 @@ const state = {
   searchTerm: "",
   composerCategoryScope: "all",
   feedCursor: null,
+  feedLastBatchSize: 0,
+  feedAutoCheckTimeoutId: 0,
   hasMoreFeed: true,
   isLoadingFeed: false,
   isLoadingSticky: false,
@@ -84,11 +89,13 @@ const refs = {
   feedError: document.getElementById("feed-error"),
   feedErrorMessage: document.getElementById("feed-error-message"),
   feedRetryBtn: document.getElementById("feed-retry-btn"),
-  feedLoadMore: document.getElementById("feed-load-more"),
+  feedScrollStatus: document.getElementById("feed-scroll-status"),
+  feedSentinel: document.getElementById("feed-sentinel"),
 
   searchInput: document.getElementById("forum-search-input"),
   sortSelect: document.getElementById("forum-sort-select"),
   categoryChips: document.getElementById("forum-category-chips"),
+  backToTopBtn: document.getElementById("forum-back-to-top"),
 
   modal: document.getElementById("thread-modal"),
   modalClose: document.getElementById("thread-modal-close"),
@@ -112,6 +119,7 @@ const refs = {
   ),
   adminCategorySubmit: document.getElementById("admin-category-submit"),
 };
+let feedObserver = null;
 
 const toTrimmedString = (value) =>
   String(value ?? "")
@@ -133,6 +141,12 @@ const slugify = (value) =>
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
+
+const slugifyThreadTitle = (value) => {
+  const rawSlug = slugify(value);
+  if (!rawSlug) return "subiect";
+  return rawSlug.split("-").slice(0, 8).join("-");
+};
 
 const safeInt = (value, fallback = 0) => {
   if (typeof value === "number" && Number.isFinite(value))
@@ -275,8 +289,11 @@ const buildThreadSearchText = (thread) => {
     .toLowerCase();
 };
 
-const buildThreadUrl = (threadId) =>
-  `/forum/thread?tid=${encodeURIComponent(threadId)}`;
+const buildThreadUrl = (thread) => {
+  const threadId = encodeURIComponent(thread?.id || "");
+  const threadSlug = encodeURIComponent(slugifyThreadTitle(thread?.title || ""));
+  return `/forum/thread/${threadId}/${threadSlug}`;
+};
 const isAdminCategoryThread = (thread) => thread?.categoryType === "admin";
 const toPublicFeedThreads = (threads) =>
   threads.filter((thread) => !isAdminCategoryThread(thread));
@@ -310,9 +327,10 @@ const clearNode = (node) => {
 
 const showFeedLoading = (isVisible) => {
   if (!refs.feedLoading || !refs.feedEmpty) return;
-  refs.feedLoading.hidden = !isVisible;
+  const shouldShowSkeleton = isVisible && state.feedThreads.length === 0;
+  refs.feedLoading.hidden = !shouldShowSkeleton;
 
-  if (isVisible) {
+  if (shouldShowSkeleton) {
     refs.feedEmpty.hidden = true;
   }
 };
@@ -370,6 +388,106 @@ const applyStickyFilters = (threads) => {
   });
 };
 
+const getFilteredFeedThreads = () =>
+  applyFeedFilters(toPublicFeedThreads(state.feedThreads));
+
+const updateChipRowOverflow = (
+  chipRowRef,
+  maxVisibleChips = MAX_VISIBLE_CATEGORY_CHIPS,
+) => {
+  if (!chipRowRef) return;
+
+  const chipCount = chipRowRef.querySelectorAll(".forum-chip").length;
+  chipRowRef.classList.toggle("is-scrollable", chipCount > maxVisibleChips);
+  chipRowRef.dataset.chipCount = String(chipCount);
+};
+
+const applySearchTermWithDebounce = (rawValue) => {
+  window.clearTimeout(state.searchDebounceId);
+
+  state.searchDebounceId = window.setTimeout(() => {
+    state.searchTerm = toTrimmedString(rawValue);
+    renderStickySection();
+    renderFeedSection();
+  }, 170);
+};
+
+const updateFeedInfiniteStatus = ({ hasError, visibleCount }) => {
+  if (!refs.feedScrollStatus || !refs.feedSentinel) return;
+
+  if (hasError) {
+    refs.feedSentinel.hidden = true;
+    refs.feedScrollStatus.textContent = "";
+    return;
+  }
+
+  const isSearchActive = state.searchTerm.length > 0;
+  const hasLoadedSome = visibleCount > 0;
+
+  if (state.isLoadingFeed && hasLoadedSome) {
+    refs.feedScrollStatus.textContent = "Se încarcă mai multe subiecte...";
+    refs.feedSentinel.hidden = false;
+    return;
+  }
+
+  if (state.hasMoreFeed) {
+    const shouldProbeForEnd =
+      state.feedLastBatchSize > 0 && state.feedLastBatchSize < PAGE_SIZE;
+
+    if (shouldProbeForEnd) {
+      refs.feedScrollStatus.textContent =
+        "Verificăm dacă mai există subiecte...";
+    } else {
+      refs.feedScrollStatus.textContent = isSearchActive ?
+          "Continuă să derulezi pentru mai multe rezultate."
+        : "Derulează pentru a încărca mai multe subiecte.";
+    }
+    refs.feedSentinel.hidden = false;
+    return;
+  }
+
+  refs.feedSentinel.hidden = true;
+  refs.feedScrollStatus.textContent = hasLoadedSome ?
+      "Ai ajuns la finalul subiectelor."
+    : "";
+};
+
+const clearFeedAutoCheckTimeout = () => {
+  if (!state.feedAutoCheckTimeoutId) return;
+  window.clearTimeout(state.feedAutoCheckTimeoutId);
+  state.feedAutoCheckTimeoutId = 0;
+};
+
+const isFeedSentinelInAutoloadRange = () => {
+  if (!refs.feedSentinel || refs.feedSentinel.hidden) return false;
+  const sentinelRect = refs.feedSentinel.getBoundingClientRect();
+  return sentinelRect.top <= window.innerHeight + FEED_AUTOLOAD_MARGIN_PX;
+};
+
+const scheduleFeedAutoCheck = () => {
+  clearFeedAutoCheckTimeout();
+
+  if (!state.hasMoreFeed || state.isLoadingFeed) return;
+  if (!refs.feedSentinel || refs.feedSentinel.hidden) return;
+
+  state.feedAutoCheckTimeoutId = window.setTimeout(async () => {
+    state.feedAutoCheckTimeoutId = 0;
+
+    if (!state.hasMoreFeed || state.isLoadingFeed) return;
+    if (!isFeedSentinelInAutoloadRange()) return;
+
+    await loadFeedPage({ reset: false });
+  }, FEED_AUTOLOAD_DELAY_MS);
+};
+
+const updateBackToTopVisibility = () => {
+  if (!refs.backToTopBtn) return;
+
+  const shouldShow = window.scrollY > 720;
+  refs.backToTopBtn.hidden = !shouldShow;
+  refs.backToTopBtn.classList.toggle("is-visible", shouldShow);
+};
+
 const renderThreadList = (listRef, threads) => {
   clearNode(listRef);
 
@@ -380,7 +498,7 @@ const renderThreadList = (listRef, threads) => {
   threads.forEach((thread) => {
     const link = document.createElement("a");
     link.className = "forum-thread-link";
-    link.href = buildThreadUrl(thread.id);
+    link.href = buildThreadUrl(thread);
     link.setAttribute("role", "listitem");
 
     const head = document.createElement("div");
@@ -480,7 +598,7 @@ const renderStickySection = () => {
 };
 
 const renderFeedSection = () => {
-  const visibleFeed = applyFeedFilters(toPublicFeedThreads(state.feedThreads));
+  const visibleFeed = getFilteredFeedThreads();
   const hasError = !refs.feedError.hidden;
 
   const isEmpty = !state.isLoadingFeed && !hasError && !visibleFeed.length;
@@ -488,17 +606,20 @@ const renderFeedSection = () => {
 
   renderThreadList(refs.feedList, visibleFeed);
 
-  const showLoadMore = !state.isLoadingFeed && state.hasMoreFeed;
-  refs.feedLoadMore.hidden = !showLoadMore;
-
   if (isEmpty) {
     renderFeedStatus("Niciun rezultat pentru filtrele selectate.");
   } else {
     renderFeedStatus(
-      `${visibleFeed.length} subiecte afișate · ${SORT_CONFIG[state.activeSort]?.label || ""}`,
+      `${visibleFeed.length} subiecte încărcate · ${SORT_CONFIG[state.activeSort]?.label || ""}`,
     );
   }
 
+  updateFeedInfiniteStatus({
+    hasError,
+    visibleCount: visibleFeed.length,
+  });
+
+  scheduleFeedAutoCheck();
   updateAuxPanels();
 };
 
@@ -541,7 +662,6 @@ const loadFeedPageFallback = async ({ requestId, reset }) => {
     where("isSticky", "==", false),
     where("categoryType", "==", "normal"),
     where("moderationStatus", "==", "visible"),
-    limit(PAGE_SIZE * 3),
   ];
 
   if (state.activeCategory !== "all") {
@@ -550,24 +670,35 @@ const loadFeedPageFallback = async ({ requestId, reset }) => {
     );
   }
 
+  if (state.feedCursor) {
+    fallbackConstraints.push(startAfter(state.feedCursor));
+  }
+
+  fallbackConstraints.push(limit(PAGE_SIZE));
+
   const snapshot = await getDocs(query(threadsRef, ...fallbackConstraints));
   if (requestId !== state.feedRequestId) return false;
 
+  state.feedLastBatchSize = snapshot.docs.length;
   const fetched = sortThreadsClientSide(snapshot.docs.map(mapThreadDoc));
 
   if (reset) {
-    state.feedThreads = fetched.slice(0, PAGE_SIZE);
+    state.feedThreads = fetched;
   } else {
     const seen = new Set(state.feedThreads.map((thread) => thread.id));
     fetched.forEach((thread) => {
-      if (!seen.has(thread.id) && state.feedThreads.length < PAGE_SIZE) {
+      if (!seen.has(thread.id)) {
         state.feedThreads.push(thread);
+        seen.add(thread.id);
       }
     });
   }
 
-  state.feedCursor = null;
-  state.hasMoreFeed = false;
+  if (snapshot.docs.length) {
+    state.feedCursor = snapshot.docs[snapshot.docs.length - 1];
+  }
+
+  state.hasMoreFeed = snapshot.docs.length > 0;
   hideFeedError();
   return true;
 };
@@ -699,8 +830,10 @@ const loadFeedPage = async ({ reset = false } = {}) => {
   if (!reset && !state.hasMoreFeed) return;
 
   if (reset) {
+    clearFeedAutoCheckTimeout();
     state.feedThreads = [];
     state.feedCursor = null;
+    state.feedLastBatchSize = 0;
     state.hasMoreFeed = true;
     hideFeedError();
     refs.feedEmpty.hidden = true;
@@ -710,19 +843,17 @@ const loadFeedPage = async ({ reset = false } = {}) => {
   state.isLoadingFeed = true;
   hideFeedError();
   showFeedLoading(true);
-  refs.feedLoadMore.disabled = true;
   renderFeedStatus("Se încarcă subiectele...");
 
   const requestId = ++state.feedRequestId;
 
   try {
     const threadsRef = collection(db, THREADS_COLLECTION);
-    const snapshot = await getDocs(
-      query(threadsRef, ...buildFeedConstraints()),
-    );
+    const snapshot = await getDocs(query(threadsRef, ...buildFeedConstraints()));
 
     if (requestId !== state.feedRequestId) return;
 
+    state.feedLastBatchSize = snapshot.docs.length;
     const fetched = snapshot.docs.map(mapThreadDoc);
 
     if (reset) {
@@ -741,7 +872,7 @@ const loadFeedPage = async ({ reset = false } = {}) => {
       state.feedCursor = snapshot.docs[snapshot.docs.length - 1];
     }
 
-    state.hasMoreFeed = snapshot.docs.length === PAGE_SIZE;
+    state.hasMoreFeed = snapshot.docs.length > 0;
     hideFeedError();
   } catch (error) {
     if (requestId !== state.feedRequestId) return;
@@ -755,6 +886,7 @@ const loadFeedPage = async ({ reset = false } = {}) => {
 
     if (!recovered) {
       state.hasMoreFeed = false;
+      state.feedLastBatchSize = 0;
       const readableError = describeError(error);
 
       if (state.feedThreads.length > 0) {
@@ -768,7 +900,6 @@ const loadFeedPage = async ({ reset = false } = {}) => {
     if (requestId === state.feedRequestId) {
       state.isLoadingFeed = false;
       showFeedLoading(false);
-      refs.feedLoadMore.disabled = false;
       renderFeedSection();
     }
   }
@@ -822,6 +953,8 @@ const getComposerCategoriesByScope = (scope) => {
 };
 
 const renderCategoryChips = () => {
+  if (!refs.categoryChips) return;
+
   clearNode(refs.categoryChips);
 
   refs.categoryChips.appendChild(
@@ -843,6 +976,8 @@ const renderCategoryChips = () => {
       }),
     );
   });
+
+  updateChipRowOverflow(refs.categoryChips);
 };
 
 const renderStickyCategoryChips = () => {
@@ -878,6 +1013,8 @@ const renderStickyCategoryChips = () => {
       }),
     );
   });
+
+  updateChipRowOverflow(refs.stickyCategoryChips);
 };
 
 const populateThreadCategorySelect = ({
@@ -1038,7 +1175,10 @@ const setModalBodyScrollLock = (isLocked) => {
       0,
       window.innerWidth - document.documentElement.clientWidth,
     );
-    document.body.style.setProperty("--modal-scrollbar-gap", `${scrollbarGap}px`);
+    document.body.style.setProperty(
+      "--modal-scrollbar-gap",
+      `${scrollbarGap}px`,
+    );
     document.body.classList.add("modal-open");
     return;
   }
@@ -1360,13 +1500,34 @@ const onModalKeydown = (event) => {
 };
 
 const onSearchInput = () => {
-  window.clearTimeout(state.searchDebounceId);
+  applySearchTermWithDebounce(refs.searchInput?.value || "");
+};
 
-  state.searchDebounceId = window.setTimeout(() => {
-    state.searchTerm = toTrimmedString(refs.searchInput.value);
-    renderStickySection();
-    renderFeedSection();
-  }, 170);
+const onFeedSentinelIntersect = async (entries) => {
+  const hasVisibleSentinel = entries.some((entry) => entry.isIntersecting);
+  if (!hasVisibleSentinel) return;
+  if (state.isLoadingFeed || !state.hasMoreFeed) return;
+
+  await loadFeedPage({ reset: false });
+};
+
+const initFeedInfiniteScroll = () => {
+  if (!refs.feedSentinel || feedObserver) return;
+  if (!("IntersectionObserver" in window)) return;
+
+  feedObserver = new IntersectionObserver(onFeedSentinelIntersect, {
+    root: null,
+    rootMargin: "0px 0px 300px 0px",
+    threshold: 0,
+  });
+  feedObserver.observe(refs.feedSentinel);
+};
+
+const onBackToTopClick = () => {
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
 };
 
 const onCategoryChipClick = async (event) => {
@@ -1516,12 +1677,8 @@ const bindEvents = () => {
     await loadFeedPage({ reset: true });
   });
 
-  refs.feedLoadMore.addEventListener("click", async () => {
-    await loadFeedPage({ reset: false });
-  });
-
   refs.sortSelect.addEventListener("change", onSortChange);
-  refs.searchInput.addEventListener("input", onSearchInput);
+  refs.searchInput?.addEventListener("input", onSearchInput);
   refs.categoryChips.addEventListener("click", onCategoryChipClick);
   refs.stickyCategoryChips?.addEventListener(
     "click",
@@ -1540,6 +1697,10 @@ const bindEvents = () => {
   refs.modalClose.addEventListener("click", closeThreadModal);
 
   document.addEventListener("keydown", onModalKeydown);
+  window.addEventListener("scroll", updateBackToTopVisibility, {
+    passive: true,
+  });
+  refs.backToTopBtn?.addEventListener("click", onBackToTopClick);
 
   refs.threadForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1555,6 +1716,8 @@ const bindEvents = () => {
 const init = async () => {
   bindEvents();
   initAuth();
+  initFeedInfiniteScroll();
+  updateBackToTopVisibility();
 
   if (refs.sortSelect && SORT_CONFIG[refs.sortSelect.value]) {
     state.activeSort = refs.sortSelect.value;

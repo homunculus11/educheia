@@ -381,14 +381,12 @@
               ></div>
 
               <div class="forum-feed-footer">
-                <button
-                  id="feed-load-more"
-                  type="button"
-                  class="btn btn-ghost"
-                  hidden
-                >
-                  Încarcă mai multe subiecte
-                </button>
+                <p id="feed-scroll-status" class="forum-scroll-status"></p>
+                <div
+                  id="feed-sentinel"
+                  class="forum-feed-sentinel"
+                  aria-hidden="true"
+                ></div>
               </div>
             </section>
           </div>
@@ -459,14 +457,6 @@
             </section>
 
             <section class="forum-side-card">
-              <h3>Căutare rapidă</h3>
-              <p>
-                Folosește căutarea de mai sus pentru titluri, autori sau
-                idei-cheie.
-              </p>
-            </section>
-
-            <section class="forum-side-card">
               <h3>Reguli de comunitate</h3>
               <ul class="forum-rules-list">
                 <li>Fii respectuos și atacă ideile, nu persoanele.</li>
@@ -478,6 +468,27 @@
         </div>
       </section>
     </main>
+    <button
+      id="forum-back-to-top"
+      type="button"
+      class="forum-back-to-top"
+      aria-label="Revino la începutul paginii"
+      hidden
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        aria-hidden="true"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M12 19V5m0 0-6 6m6-6 6 6"
+        ></path>
+      </svg>
+    </button>
 
     <div id="thread-modal" class="forum-modal" aria-hidden="true" hidden>
       <div class="forum-modal-backdrop" data-close-modal></div>

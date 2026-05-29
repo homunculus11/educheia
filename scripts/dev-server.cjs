@@ -144,6 +144,12 @@ for (const [routePath, relFile] of Object.entries(ROUTE_MAP)) {
   app.get(`${routePath}/`, (_req, res) => res.redirect(301, routePath));
 }
 
+// Forum thread SEO routes
+app.get(
+  ['/forum/thread/:threadId', '/forum/thread/:threadId/:threadSlug'],
+  (_req, res, next) => sendIfExists(res, 'src/forum-thread.html', next),
+);
+
 // Strip .html extension redirects
 for (const routePath of Object.keys(ROUTE_MAP)) {
   if (routePath === '/') continue;

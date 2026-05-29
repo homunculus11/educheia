@@ -205,6 +205,31 @@ h4 {
   @apply mb-4 flex flex-wrap gap-2;
 }
 
+.forum-chip-row.is-scrollable {
+  @apply flex-nowrap overflow-x-auto pb-1;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(146, 198, 218, 0.55) rgba(17, 29, 48, 0.38);
+}
+
+.forum-chip-row.is-scrollable .forum-chip {
+  @apply flex-shrink-0;
+}
+
+.forum-chip-row.is-scrollable::-webkit-scrollbar {
+  height: 7px;
+}
+
+.forum-chip-row.is-scrollable::-webkit-scrollbar-track {
+  background: rgba(17, 29, 48, 0.38);
+  border-radius: 999px;
+}
+
+.forum-chip-row.is-scrollable::-webkit-scrollbar-thumb {
+  background: rgba(146, 198, 218, 0.55);
+  border-radius: 999px;
+}
+
 .forum-chip-row-compact {
   @apply mb-3;
 }
@@ -234,6 +259,7 @@ h4 {
 .forum-sort select:focus-visible,
 .forum-search input:focus-visible,
 .forum-create-btn:focus-visible,
+.forum-back-to-top:focus-visible,
 .forum-modal-close:focus-visible,
 .forum-form input:focus-visible,
 .forum-form select:focus-visible,
@@ -352,7 +378,15 @@ h4 {
 }
 
 .forum-feed-footer {
-  @apply mt-3 flex items-center justify-center;
+  @apply mt-3 flex flex-col items-center justify-center gap-2;
+}
+
+.forum-scroll-status {
+  @apply m-0 text-sm font-semibold text-[#9fb3cf];
+}
+
+.forum-feed-sentinel {
+  @apply h-px w-full;
 }
 
 .forum-sidebar {
@@ -377,6 +411,26 @@ h4 {
 
 .forum-admin-card {
   border-color: rgba(144, 193, 205, 0.44);
+}
+
+.forum-back-to-top {
+  @apply fixed bottom-6 right-6 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#8fd6df8f] bg-[#163050db] p-0 text-[#eff8ff] shadow-[0_18px_34px_rgba(4,10,18,0.42)] transition-all duration-200;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.forum-back-to-top:hover {
+  @apply border-[#9ce7ef] text-white;
+  background: rgba(48, 102, 130, 0.92);
+}
+
+.forum-back-to-top.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.forum-back-to-top svg {
+  @apply h-5 w-5;
 }
 
 .forum-admin-copy {
