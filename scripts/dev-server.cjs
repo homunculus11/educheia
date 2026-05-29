@@ -38,6 +38,7 @@ const ROUTE_MAP = {
   '/episodes' : 'src/episodes.html',
   '/about'    : 'src/about.html',
   '/forum'    : 'src/forum.html',
+  '/forum/thread': 'src/forum-thread.html',
   '/login'    : 'src/login.html',
   '/register' : 'src/register.html',
   '/account'  : 'src/account.html',

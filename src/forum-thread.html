@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ro">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Pagina individuală de discuție din forumul Educheia este în pregătire.">
+    <meta name="robots" content="noindex,follow">
+    <meta name="author" content="Educheia">
+    <meta name="theme-color" content="#0f1524">
+    <title>Subiect Forum | În curând</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript>
+        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+    </noscript>
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/forum.css">
+    <link rel="apple-touch-icon" sizes="180x180" href="../images/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../images/favicon-16x16.png">
+    <link rel="icon" href="../images/favicon.ico" sizes="any">
+    <link rel="manifest" href="../images/site.webmanifest">
+</head>
+
+<body data-theme="dark">
+    <nav class="site-header">
+        <div class="header-left">
+            <a href="/" class="logo-link">
+                <picture>
+                    <source srcset="../images/logo-dark-h54.webp 1x, ../images/logo-dark-h108.webp 2x" media="(prefers-color-scheme: light)">
+                    <source srcset="../images/logo-light-h54.webp 1x, ../images/logo-light-h108.webp 2x" media="(prefers-color-scheme: dark)">
+                    <img id="header-logo" src="../images/logo-light-h54.webp" alt="Educheia Logo" width="179" height="54" decoding="async">
+                </picture>
+            </a>
+
+            <button class="menu-toggle" type="button" aria-expanded="false" aria-label="Toggle navigation">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+
+        <div id="header-drawer" class="header-drawer">
+            <ul id="header-items" class="header-items">
+                <li><a href="/" class="header-item">Acasă</a></li>
+                <li><a href="/episodes" class="header-item">Toate Episoadele</a></li>
+                <li><a href="/about" class="header-item">Despre</a></li>
+                <li><a href="/forum" class="header-item active">Forum</a></li>
+            </ul>
+
+            <div id="header-btns" class="header-btns auth-pending">
+                <a href="/login" id="login-btn">Login</a>
+                <a href="/register" id="signup-btn">Signup</a>
+            </div>
+        </div>
+
+        <div class="header-overlay" aria-hidden="true"></div>
+    </nav>
+
+    <main class="forum-main forum-placeholder-main">
+        <section class="forum-shell forum-placeholder-section">
+            <div class="forum-placeholder-card">
+                <p class="forum-kicker">Subiect individual</p>
+                <h1>Pagina acestui subiect este în pregătire</h1>
+                <p>Am pregătit deja infrastructura forumului principal. Vizualizarea completă a unui thread va fi disponibilă în următorul pas.</p>
+                <p id="placeholder-thread-id" class="forum-placeholder-id">ID subiect: necunoscut</p>
+                <div class="forum-placeholder-actions">
+                    <a href="/forum" class="btn btn-primary">Înapoi la forum</a>
+                    <a href="/episodes" class="btn btn-ghost">Vezi episoadele</a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-inner">
+            <div class="footer-bottom">
+                <p class="footer-copy">&copy; 2026 Educheia. Toate drepturile rezervate.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            const target = document.getElementById('placeholder-thread-id');
+            if (!target) return;
+            const params = new URLSearchParams(window.location.search);
+            const tid = (params.get('tid') || '').trim();
+            if (!tid) return;
+            target.textContent = `ID subiect: ${tid}`;
+        })();
+    </script>
+    <script src="../js/script.js"></script>
+    <script type="module" src="../js/account-nav.js"></script>
+</body>
+
+</html>
