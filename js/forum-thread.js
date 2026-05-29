@@ -88,7 +88,9 @@ const canonicalizeThreadUrl = async () => {
   }
 
   try {
-    const snapshot = await getDoc(doc(db, THREADS_COLLECTION, resolvedThreadId));
+    const snapshot = await getDoc(
+      doc(db, THREADS_COLLECTION, resolvedThreadId),
+    );
     if (!snapshot.exists()) {
       revealThreadPage();
       return;

@@ -291,7 +291,9 @@ const buildThreadSearchText = (thread) => {
 
 const buildThreadUrl = (thread) => {
   const threadId = encodeURIComponent(thread?.id || "");
-  const threadSlug = encodeURIComponent(slugifyThreadTitle(thread?.title || ""));
+  const threadSlug = encodeURIComponent(
+    slugifyThreadTitle(thread?.title || ""),
+  );
   return `/forum/thread/${threadId}/${threadSlug}`;
 };
 const isAdminCategoryThread = (thread) => thread?.categoryType === "admin";
@@ -438,7 +440,8 @@ const updateFeedInfiniteStatus = ({ hasError, visibleCount }) => {
       refs.feedScrollStatus.textContent =
         "Verificăm dacă mai există subiecte...";
     } else {
-      refs.feedScrollStatus.textContent = isSearchActive ?
+      refs.feedScrollStatus.textContent =
+        isSearchActive ?
           "Continuă să derulezi pentru mai multe rezultate."
         : "Derulează pentru a încărca mai multe subiecte.";
     }
@@ -447,9 +450,8 @@ const updateFeedInfiniteStatus = ({ hasError, visibleCount }) => {
   }
 
   refs.feedSentinel.hidden = true;
-  refs.feedScrollStatus.textContent = hasLoadedSome ?
-      "Ai ajuns la finalul subiectelor."
-    : "";
+  refs.feedScrollStatus.textContent =
+    hasLoadedSome ? "Ai ajuns la finalul subiectelor." : "";
 };
 
 const clearFeedAutoCheckTimeout = () => {
@@ -849,7 +851,9 @@ const loadFeedPage = async ({ reset = false } = {}) => {
 
   try {
     const threadsRef = collection(db, THREADS_COLLECTION);
-    const snapshot = await getDocs(query(threadsRef, ...buildFeedConstraints()));
+    const snapshot = await getDocs(
+      query(threadsRef, ...buildFeedConstraints()),
+    );
 
     if (requestId !== state.feedRequestId) return;
 
