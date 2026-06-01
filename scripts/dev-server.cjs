@@ -31,6 +31,9 @@ const rootArg = readArg("--root", ".");
 const portArg = Number.parseInt(readArg("--port", "5173"), 10);
 const ROOT_DIR = path.resolve(process.cwd(), rootArg);
 const PORT = Number.isFinite(portArg) ? portArg : 5173;
+const LIVE_RELOAD_ROUTE = "/__dev/livereload";
+const LIVE_RELOAD_EXTS = new Set([".html", ".js", ".css"]);
+const LIVE_RELOAD_IGNORED_DIRS = new Set([".git", "node_modules"]);
 
 // ── Route map ────────────────────────────────────────────────────────────────
 const ROUTE_MAP = {
@@ -51,6 +54,46 @@ const statusColor = (sc) =>
   : sc >= 400 ? YLW
   : sc >= 300 ? CYN
   : GRN;
+const liveReloadClients = new Set();
+const LIVE_RELOAD_SNIPPET = `<script>
+(() => {
+  if (window.__EDUCHEIA_LIVE_RELOAD__) return;
+  window.__EDUCHEIA_LIVE_RELOAD__ = true;
+  let hadConnection = false;
+  let lostConnection = false;
+  const connect = () => {
+    const es = new EventSource("${LIVE_RELOAD_ROUTE}");
+    es.onopen = () => {
+      if (hadConnection && lostConnection) {
+        location.reload();
+        return;
+      }
+      hadConnection = true;
+      lostConnection = false;
+    };
+    es.addEventListener("reload", () => location.reload());
+    es.onerror = () => {
+      lostConnection = hadConnection || lostConnection;
+      es.close();
+      setTimeout(connect, 400);
+    };
+  };
+  connect();
+})();
+</script>`;
+
+function injectLiveReload(html) {
+  if (html.includes("window.__EDUCHEIA_LIVE_RELOAD__")) return html;
+  if (/<\/body>/i.test(html)) {
+    return html.replace(/<\/body>/i, `${LIVE_RELOAD_SNIPPET}\n</body>`);
+  }
+  return `${html}\n${LIVE_RELOAD_SNIPPET}\n`;
+}
+
+function sendHtml(res, abs) {
+  const source = fs.readFileSync(abs, "utf8");
+  res.type("html").send(injectLiveReload(source));
+}
 
 function sendIfExists(res, rel, next) {
   const abs = path.resolve(ROOT_DIR, normPath(rel).replace(/^\/+/, ""));
@@ -62,7 +105,63 @@ function sendIfExists(res, rel, next) {
     next();
     return;
   }
+  if (path.extname(abs).toLowerCase() === ".html") {
+    sendHtml(res, abs);
+    return;
+  }
   res.sendFile(abs);
+}
+
+function watchPathAllowed(relPath) {
+  if (!relPath) return false;
+  const normalized = normPath(relPath);
+  const parts = normalized.split("/");
+  if (parts.some((part) => LIVE_RELOAD_IGNORED_DIRS.has(part))) return false;
+  return LIVE_RELOAD_EXTS.has(path.extname(normalized).toLowerCase());
+}
+
+function broadcastReload(relPath) {
+  if (!liveReloadClients.size) return;
+  const payload = `event: reload\ndata: ${normPath(relPath)}\n\n`;
+  for (const client of liveReloadClients) client.write(payload);
+}
+
+function startLiveReloadWatcher() {
+  let debounceTimer = null;
+  let lastChangedPath = null;
+
+  const scheduleReload = (relPath) => {
+    lastChangedPath = relPath || lastChangedPath || "(unknown)";
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      const changed = lastChangedPath || "(unknown)";
+      lastChangedPath = null;
+      broadcastReload(changed);
+      log(`${c(CYN, "↻")}  reloading browser (${changed})`);
+    }, 80);
+  };
+
+  let watcher;
+  try {
+    watcher = fs.watch(
+      ROOT_DIR,
+      { recursive: true },
+      (_eventType, filename) => {
+        const rel = filename ? String(filename) : null;
+        if (!watchPathAllowed(rel)) return;
+        scheduleReload(rel);
+      },
+    );
+  } catch (err) {
+    log(`${c(YLW, "!")}  live reload disabled: ${err.message}`);
+    return;
+  }
+
+  watcher.on("error", (err) => {
+    log(`${c(YLW, "!")}  live reload watcher error: ${err.message}`);
+  });
+
+  process.on("exit", () => watcher.close());
 }
 
 // ── 404 page ─────────────────────────────────────────────────────────────────
@@ -143,8 +242,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Static files
-app.use(express.static(ROOT_DIR, { extensions: ["html"] }));
+app.get(LIVE_RELOAD_ROUTE, (_req, res) => {
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+  res.write("retry: 400\n\n");
+  liveReloadClients.add(res);
+  res.on("close", () => liveReloadClients.delete(res));
+});
 
 // Root redirect aliases
 app.get(["/index.html", "/src/index.html"], (_req, res) =>
@@ -169,6 +275,12 @@ for (const routePath of Object.keys(ROUTE_MAP)) {
   app.get(`${routePath}.html`, (_req, res) => res.redirect(301, routePath));
 }
 
+// Direct HTML file requests
+app.get(/\.html$/i, (req, res, next) => {
+  const rel = req.path.replace(/^\/+/, "");
+  sendIfExists(res, rel, next);
+});
+
 // Extension-less fallback (try <path>.html)
 app.use((req, res, next) => {
   if (path.extname(req.path)) {
@@ -183,17 +295,24 @@ app.use((req, res, next) => {
   sendIfExists(res, `${clean}.html`, next);
 });
 
+// Static assets
+app.use(express.static(ROOT_DIR, { index: false }));
+
 // 404
 app.use((req, res) => {
-  res.status(404).type("text/html").send(NOT_FOUND_HTML);
+  res.status(404).type("text/html").send(injectLiveReload(NOT_FOUND_HTML));
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const server = app.listen(PORT, () => {
+  startLiveReloadWatcher();
   console.log();
   console.log(`  ${c(B + GRN, "▶")}  ${c(B, `http://localhost:${PORT}`)}`);
   console.log(`  ${c(D, "root")}   ${ROOT_DIR}`);
   console.log(`  ${c(D, "routes")} ${Object.keys(ROUTE_MAP).join("  ")}`);
+  console.log(
+    `  ${c(D, "reload")} ${LIVE_RELOAD_EXTS.size} extensions watched`,
+  );
   console.log();
 });
 

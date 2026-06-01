@@ -152,9 +152,7 @@ launch(
   () => ({
     command: process.execPath,
     args: [
-      "--watch-path=index.html",
-      "--watch-path=src",
-      "--watch-path=js",
+      "--watch-path=scripts/dev-server.cjs",
       path.join(__dirname, "dev-server.cjs"), // eslint-disable-line
       "--root",
       ".",
