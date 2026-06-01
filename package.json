@@ -2,17 +2,19 @@
   "name": "educheia",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@11.5.0",
   "scripts": {
     "dev": "node ./scripts/dev.cjs",
-    "run": "node ./scripts/dev-server.cjs --root dist --port 4173",
+    "start": "node ./scripts/dev-server.cjs --root dist --port 4173",
     "build": "node ./scripts/build.cjs",
     "build:images": "node ./scripts/generate-responsive-images.cjs",
     "build:css": "node ./scripts/tailwind-auto.cjs build --concurrency 8",
     "watch:css": "node ./scripts/tailwind-auto.cjs watch"
   },
   "devDependencies": {
-    "tailwindcss": "^3.4.19"
+    "html-minifier-terser": "^7.2.0",
+    "tailwindcss": "^3.4.19",
+    "terser": "^5.43.1"
   },
   "dependencies": {
     "express": "^5.2.1",

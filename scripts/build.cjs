@@ -4,6 +4,8 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { spawnSync } = require("child_process");
+const { minify: minifyJs } = require("terser");
+const { minify: minifyHtml } = require("html-minifier-terser");
 const {
   log,
   warn,
@@ -37,6 +39,23 @@ const COPY_ITEMS = [
 const FINGERPRINT_EXTS = new Set([".js", ".css"]);
 const REFERENCE_EXTS = new Set([".html", ".js"]);
 const TOTAL_STEPS = 6;
+const HTML_MINIFY_OPTIONS = {
+  collapseWhitespace: true,
+  removeComments: true,
+  removeRedundantAttributes: true,
+  removeEmptyAttributes: true,
+  removeScriptTypeAttributes: true,
+  removeStyleLinkTypeAttributes: true,
+  useShortDoctype: true,
+  keepClosingSlash: true,
+  minifyCSS: true,
+};
+const JS_MINIFY_OPTIONS = {
+  ecma: 2020,
+  compress: { passes: 2 },
+  mangle: true,
+  format: { comments: false },
+};
 
 // ── Flags ────────────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
@@ -63,6 +82,66 @@ function walk(dir) {
   };
   recurse(dir);
   return files;
+}
+
+function isEsmSource(code) {
+  return /(^|[\r\n])\s*(import|export)\s/m.test(code);
+}
+
+function getJsMinifyOptions(isModule) {
+  const compress = { ...JS_MINIFY_OPTIONS.compress };
+  if (!isModule) {
+    // Keep top-level bindings for cross-file globals (e.g. getEpisodes).
+    compress.unused = false;
+    compress.toplevel = false;
+  }
+  return {
+    ...JS_MINIFY_OPTIONS,
+    compress,
+    module: isModule,
+  };
+}
+
+async function minifyInlineScripts(html, label) {
+  const scriptTag = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+  let lastIndex = 0;
+  let output = "";
+  let match;
+
+  while ((match = scriptTag.exec(html))) {
+    const [full, attrs, body] = match;
+    output += html.slice(lastIndex, match.index);
+    lastIndex = match.index + full.length;
+
+    if (/\bsrc\s*=\s*/i.test(attrs)) {
+      output += full;
+      continue;
+    }
+
+    const typeMatch = attrs.match(
+      /\btype\s*=\s*["']?([^"'\s>]+)["']?/i,
+    );
+    const type = (typeMatch ? typeMatch[1] : "text/javascript").toLowerCase();
+    if (type === "application/ld+json" || type === "application/json") {
+      output += full;
+      continue;
+    }
+
+    if (!body.trim()) {
+      output += full;
+      continue;
+    }
+
+    const isModule = type === "module" || isEsmSource(body);
+    const result = await minifyJs(body, getJsMinifyOptions(isModule));
+    if (!result || !result.code) {
+      throw new Error(`Inline JS minification failed for ${label}`);
+    }
+    output += `<script${attrs}>${result.code}</script>`;
+  }
+
+  output += html.slice(lastIndex);
+  return output;
 }
 
 function runScript(scriptName) {
@@ -140,6 +219,62 @@ function copyBuiltCss() {
     n++;
   }
   return n;
+}
+
+async function minifyDistAssets() {
+  const files = walk(DIST_DIR);
+  const jsFiles = files.filter((f) => path.extname(f).toLowerCase() === ".js");
+  const htmlFiles = files.filter(
+    (f) => path.extname(f).toLowerCase() === ".html",
+  );
+
+  let bytesSaved = 0;
+  let jsMinified = 0;
+  let htmlMinified = 0;
+
+  for (const filePath of jsFiles) {
+    const original = fs.readFileSync(filePath, "utf8");
+    const isModule = isEsmSource(original);
+    const result = await minifyJs(original, getJsMinifyOptions(isModule));
+    if (!result || !result.code) {
+      throw new Error(
+        `Terser failed to minify ${toPosix(path.relative(DIST_DIR, filePath))}`,
+      );
+    }
+    if (result.code !== original) {
+      fs.writeFileSync(filePath, result.code, "utf8");
+      bytesSaved +=
+        Buffer.byteLength(original, "utf8") -
+        Buffer.byteLength(result.code, "utf8");
+      jsMinified++;
+    }
+  }
+
+  for (const filePath of htmlFiles) {
+    const original = fs.readFileSync(filePath, "utf8");
+    const withMinifiedScripts = await minifyInlineScripts(
+      original,
+      toPosix(path.relative(DIST_DIR, filePath)),
+    );
+    const result = await minifyHtml(withMinifiedScripts, HTML_MINIFY_OPTIONS);
+    if (typeof result !== "string") {
+      throw new Error(
+        `HTML minifier failed for ${toPosix(path.relative(DIST_DIR, filePath))}`,
+      );
+    }
+    if (result !== original) {
+      fs.writeFileSync(filePath, result, "utf8");
+      bytesSaved +=
+        Buffer.byteLength(original, "utf8") - Buffer.byteLength(result, "utf8");
+      htmlMinified++;
+    }
+  }
+
+  return {
+    js: { scanned: jsFiles.length, minified: jsMinified },
+    html: { scanned: htmlFiles.length, minified: htmlMinified },
+    bytesSaved,
+  };
 }
 
 function buildFingerprintName(name, buf) {
@@ -273,7 +408,15 @@ async function main() {
   const copiedPaths = copyItems();
   const copiedCss = copyBuiltCss();
 
-  // ── 4. Fingerprint ────────────────────────────────────────────────────────
+  // ── 4. Minify assets ──────────────────────────────────────────────────────
+  const tMin = Date.now();
+  next("Minifying assets");
+  const minified = await minifyDistAssets();
+  log(
+    `Minified JS ${minified.js.minified}/${minified.js.scanned}, HTML ${minified.html.minified}/${minified.html.scanned} in ${elapsed(tMin)}`,
+  );
+
+  // ── 5. Fingerprint ────────────────────────────────────────────────────────
   const tFp = Date.now();
   next("Fingerprinting assets");
   const manifest = fingerprintAssets();
@@ -281,7 +424,7 @@ async function main() {
     `Fingerprinted ${Object.keys(manifest).length} asset(s) in ${elapsed(tFp)}`,
   );
 
-  // ── 5. Rewrite references ─────────────────────────────────────────────────
+  // ── 6. Rewrite references ─────────────────────────────────────────────────
   const tRw = Date.now();
   next("Rewriting asset references");
   const rw = rewriteReferences(manifest);
@@ -292,6 +435,9 @@ async function main() {
   summary([
     ["Copied paths", `${copiedPaths}/${COPY_ITEMS.length}`],
     ["Compiled CSS files", String(copiedCss)],
+    ["Minified JS", `${minified.js.minified}/${minified.js.scanned}`],
+    ["Minified HTML", `${minified.html.minified}/${minified.html.scanned}`],
+    ["Minify savings", bytes(minified.bytesSaved)],
     ["Fingerprinted", String(Object.keys(manifest).length)],
     ["References rewritten", `${rw.rewritten}/${rw.scanned}`],
     ["Total duration", elapsed(t0)],
