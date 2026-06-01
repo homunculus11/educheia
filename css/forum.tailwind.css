@@ -592,6 +592,238 @@ body.modal-open {
   padding-right: var(--modal-scrollbar-gap, 0px);
 }
 
+.forum-thread-main {
+  @apply pb-16 pt-[110px];
+}
+
+.forum-thread-shell {
+  @apply relative;
+}
+
+.forum-thread-grid {
+  @apply top-[-70px] h-[420px];
+}
+
+.forum-thread-state {
+  @apply mx-auto w-full max-w-[780px] rounded-[22px] border border-[#8aa4c440] bg-[linear-gradient(160deg,rgba(20,32,54,0.88),rgba(14,24,42,0.96))] px-[clamp(1rem,2vw,2rem)] py-[clamp(1rem,2vw,1.8rem)] text-center shadow-[0_20px_56px_rgba(4,10,18,0.42)];
+}
+
+.forum-thread-state h1 {
+  @apply m-0 text-[clamp(1.55rem,3.7vw,2.4rem)] font-bold leading-[1.08] text-[#f2f7ff];
+}
+
+.forum-thread-state p {
+  @apply mb-0 mt-3 text-[0.98rem] text-[#c5d4e8];
+}
+
+.forum-thread-state-actions {
+  @apply mt-5 flex flex-wrap items-center justify-center gap-3;
+}
+
+.forum-thread-page-head {
+  @apply mb-4;
+}
+
+.forum-thread-back-link {
+  @apply inline-flex items-center gap-2 rounded-full border border-[#8aa4c448] bg-[#14233fa8] px-3 py-[7px] text-[0.8rem] font-semibold text-[#dbeafc] no-underline transition-colors duration-200;
+}
+
+.forum-thread-back-link:hover {
+  @apply border-[#93d2dc8c] text-white;
+  background: rgba(42, 77, 112, 0.7);
+}
+
+.forum-thread-page-head h1 {
+  @apply mb-0 mt-3 text-[clamp(1.85rem,4vw,3.1rem)] font-bold leading-[1.06] text-[#edf3ff];
+}
+
+.forum-thread-layout {
+  @apply grid items-start gap-6;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 300px);
+}
+
+.forum-thread-primary {
+  @apply flex min-w-0 flex-col gap-5;
+}
+
+.forum-thread-summary h2 {
+  @apply m-0 text-[clamp(1.2rem,2.3vw,1.55rem)] font-bold text-[#edf3ff];
+}
+
+.forum-thread-summary-meta {
+  @apply mt-4 grid gap-3 border-b border-[#8da8c336] pb-4;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.forum-thread-author {
+  @apply flex min-w-0 items-center gap-3;
+}
+
+.forum-thread-author-avatar {
+  @apply inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#8da8c452] bg-[#20334fba] text-base font-bold text-[#e6f1ff];
+}
+
+.forum-thread-meta-label {
+  @apply m-0 text-[11px] font-bold uppercase tracking-[0.08em] text-[#99b6d7];
+}
+
+.forum-thread-meta-value {
+  @apply mb-0 mt-1 text-sm font-semibold text-[#e5efff];
+}
+
+.forum-thread-summary-badges {
+  @apply mt-3 flex flex-wrap gap-2;
+}
+
+.forum-thread-summary-body {
+  @apply mb-0 mt-3 whitespace-pre-line text-[1.04rem] leading-[1.58] text-[#d5e1f2];
+}
+
+.forum-thread-summary-footer {
+  @apply mt-5 flex flex-wrap items-center justify-between gap-3;
+}
+
+.forum-thread-last-activity {
+  @apply m-0 text-sm text-[#a8bdd8];
+}
+
+.forum-thread-section-head h2 {
+  @apply m-0 text-[clamp(1.18rem,2.2vw,1.45rem)] font-bold text-[#edf3ff];
+}
+
+.forum-thread-section-head p {
+  @apply mb-0 mt-2 text-sm text-[#b5c7df];
+}
+
+.forum-thread-section-head-wide {
+  @apply flex flex-wrap items-start justify-between gap-2;
+}
+
+.forum-inline-link {
+  @apply font-semibold text-[#a6dcea] no-underline;
+}
+
+.forum-inline-link:hover {
+  @apply text-white underline;
+}
+
+.forum-reply-list {
+  @apply mt-2 flex flex-col gap-3;
+}
+
+.forum-reply-card {
+  @apply rounded-[16px] border border-[#8ba6c437] bg-[#172842aa] px-4 py-4;
+}
+
+.forum-reply-head {
+  @apply flex flex-wrap items-start justify-between gap-3;
+}
+
+.forum-reply-author {
+  @apply flex min-w-0 items-center gap-3;
+}
+
+.forum-reply-avatar {
+  @apply inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#8ea8c44f] bg-[#1d314cb5] text-sm font-bold text-[#e2ecfb];
+}
+
+.forum-reply-meta {
+  @apply min-w-0;
+}
+
+.forum-reply-meta-top {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.forum-reply-name {
+  @apply text-sm font-semibold text-[#ecf3ff];
+}
+
+.forum-reply-time {
+  @apply text-xs text-[#9fb6d3];
+}
+
+.forum-reply-badges {
+  @apply mt-1 flex flex-wrap gap-2;
+}
+
+.forum-reply-body {
+  @apply mb-0 mt-3 whitespace-pre-line text-[0.95rem] leading-[1.55] text-[#d2deef];
+}
+
+.forum-reply-actions {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.forum-reply-action {
+  @apply rounded-full border border-[#8ea9c451] bg-[#2035529b] px-3 py-[6px] text-xs font-semibold text-[#dde9fb] transition-colors duration-200;
+}
+
+.forum-reply-action:hover {
+  @apply border-[#9bdce4aa] text-white;
+  background: rgba(62, 112, 140, 0.55);
+}
+
+.forum-reply-action-danger:hover {
+  border-color: rgba(248, 152, 152, 0.75);
+  background: rgba(123, 57, 67, 0.5);
+}
+
+.forum-reply-edit-form {
+  @apply mt-3 flex flex-col gap-2;
+}
+
+.forum-reply-edit-input {
+  @apply min-h-[110px] w-full resize-y rounded-xl border border-[#8ca6c542] bg-[#13223dbd] px-3 py-[10px] text-sm text-[#edf4ff] outline-none transition-colors duration-200;
+  font: inherit;
+}
+
+.forum-reply-edit-input:focus-visible {
+  @apply border-primary outline outline-2 outline-offset-2 outline-primary;
+}
+
+.forum-reply-edit-actions {
+  @apply flex flex-wrap items-center justify-end gap-2;
+}
+
+.forum-reply-skeleton {
+  @apply h-[105px];
+}
+
+.forum-thread-replies-footer {
+  @apply mt-3 flex items-center justify-center;
+}
+
+.forum-thread-moderation {
+  border-color: rgba(152, 197, 216, 0.48);
+}
+
+.forum-thread-mod-grid {
+  @apply grid gap-2 rounded-xl border border-[#8ca9c444] bg-[#1a2b4791] px-3 py-2;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.forum-thread-sidebar {
+  @apply sticky top-[126px] flex flex-col gap-4;
+}
+
+.forum-thread-side-meta {
+  @apply mt-3;
+}
+
+.forum-thread-side-meta p {
+  @apply mb-0 mt-2 text-sm text-[#c8d7eb];
+}
+
+.forum-thread-side-meta strong {
+  @apply text-[1.02rem] text-[#edf4ff];
+}
+
+.forum-thread-back-link:focus-visible,
+.forum-reply-action:focus-visible {
+  @apply outline outline-2 outline-offset-2 outline-primary;
+}
+
 .forum-placeholder-main {
   @apply pb-20 pt-[112px];
 }
@@ -646,6 +878,14 @@ body.modal-open {
   .forum-sidebar {
     @apply static;
   }
+
+  .forum-thread-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .forum-thread-sidebar {
+    @apply static;
+  }
 }
 
 @media (max-width: 900px) {
@@ -675,6 +915,18 @@ body.modal-open {
 
   .forum-thread-count {
     @apply text-lg;
+  }
+
+  .forum-thread-main {
+    @apply pb-12 pt-[96px];
+  }
+
+  .forum-thread-summary-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .forum-thread-mod-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

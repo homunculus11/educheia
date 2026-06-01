@@ -34,10 +34,23 @@ service cloud.firestore {
           : 'member';
     }
 
+    function hasAdminClaim() {
+      return isSignedIn() && (
+        (('admin' in request.auth.token) && request.auth.token.admin == true)
+        || (('role' in request.auth.token) && request.auth.token.role == 'admin')
+      );
+    }
+
+    function hasModeratorClaim() {
+      return isSignedIn() && (
+        (('moderator' in request.auth.token) && request.auth.token.moderator == true)
+        || (('role' in request.auth.token) && request.auth.token.role == 'moderator')
+      );
+    }
+
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.admin == true
-        || request.auth.token.role == 'admin'
+        hasAdminClaim()
         || storedForumRole(request.auth.uid) == 'admin'
       );
     }
@@ -45,8 +58,7 @@ service cloud.firestore {
     function isModerator() {
       return isSignedIn() && (
         isAdmin()
-        || request.auth.token.moderator == true
-        || request.auth.token.role == 'moderator'
+        || hasModeratorClaim()
         || storedForumRole(request.auth.uid) == 'moderator'
       );
     }
@@ -133,8 +145,22 @@ service cloud.firestore {
 
     function categoryMatchesType(categoryId, categoryType) {
       return categoryIsActive(categoryId)
-        && ('type' in categoryDoc(categoryId).data)
-        && categoryDoc(categoryId).data.type == categoryType;
+        && (
+          (
+            'type' in categoryDoc(categoryId).data
+            && (
+              categoryDoc(categoryId).data.type == categoryType
+              || (
+                categoryDoc(categoryId).data.type != 'admin'
+                && categoryType == 'normal'
+              )
+            )
+          )
+          || (
+            !('type' in categoryDoc(categoryId).data)
+            && categoryType == 'normal'
+          )
+        );
     }
 
     function threadPath(threadId) {
@@ -157,6 +183,7 @@ service cloud.firestore {
         )
         && (
           isModerator()
+          || !('moderationStatus' in threadDoc(threadId).data)
           || threadDoc(threadId).data.moderationStatus == 'visible'
           || (isSignedIn() && threadDoc(threadId).data.authorUid == request.auth.uid)
         );
@@ -164,6 +191,13 @@ service cloud.firestore {
 
     function validModerationStatus(value) {
       return value == 'visible' || value == 'pending' || value == 'hidden';
+    }
+
+    function authorEmailMatchesAuthToken(emailValue) {
+      return !('email' in request.auth.token)
+        || !(request.auth.token.email is string)
+        || request.auth.token.email.size() == 0
+        || emailValue.lower() == request.auth.token.email.lower();
     }
 
     function validCategoryType(value) {
@@ -261,7 +295,11 @@ service cloud.firestore {
         && request.resource.data.authorName.size() > 0
         && request.resource.data.authorName.size() <= 80
         && (!('authorEmail' in request.resource.data)
-          || request.resource.data.authorEmail == request.auth.token.email)
+          || (
+            request.resource.data.authorEmail is string
+            && request.resource.data.authorEmail.size() <= 254
+            && authorEmailMatchesAuthToken(request.resource.data.authorEmail)
+          ))
         && request.resource.data.authorIsAdmin == isAdmin()
         && request.resource.data.isSticky is bool
         && (!request.resource.data.isSticky || isAdmin())
@@ -378,6 +416,43 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt;
     }
 
+    function validForumThreadCounterSyncUpdate() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'commentCount',
+          'updatedAt',
+          'lastActivityAt'
+        ])
+        && request.resource.data.commentCount is number
+        && request.resource.data.commentCount >= 0
+        && (
+          (
+            'commentCount' in resource.data
+            && resource.data.commentCount is number
+            && (
+              request.resource.data.commentCount == resource.data.commentCount + 1
+              || request.resource.data.commentCount == resource.data.commentCount - 1
+            )
+          )
+          || (
+            !('commentCount' in resource.data)
+            && request.resource.data.commentCount == 1
+          )
+          || (
+            'commentCount' in resource.data
+            && !(resource.data.commentCount is number)
+            && request.resource.data.commentCount >= 0
+          )
+        )
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastActivityAt == request.time
+        && (
+          !('moderationStatus' in resource.data)
+          || resource.data.moderationStatus == 'visible'
+          || isModerator()
+          || (isSignedIn() && request.auth.uid == resource.data.authorUid)
+        );
+    }
+
     function validForumCommentPayload() {
       return request.resource.data.keys().hasOnly([
           'body',
@@ -406,7 +481,11 @@ service cloud.firestore {
         && request.resource.data.authorName.size() > 0
         && request.resource.data.authorName.size() <= 80
         && (!('authorEmail' in request.resource.data)
-          || request.resource.data.authorEmail == request.auth.token.email)
+          || (
+            request.resource.data.authorEmail is string
+            && request.resource.data.authorEmail.size() <= 254
+            && authorEmailMatchesAuthToken(request.resource.data.authorEmail)
+          ))
         && request.resource.data.authorIsAdmin == isAdmin()
         && validModerationStatus(request.resource.data.moderationStatus)
         && (isAdmin() || request.resource.data.moderationStatus != 'hidden')
@@ -572,7 +651,8 @@ service cloud.firestore {
 
     match /forumThreads/{threadId} {
       allow read: if (
-          resource.data.moderationStatus == 'visible'
+          !('moderationStatus' in resource.data)
+          || resource.data.moderationStatus == 'visible'
           || isModerator()
           || (isSignedIn() && request.auth.uid == resource.data.authorUid)
         );
@@ -592,6 +672,8 @@ service cloud.firestore {
           isAdmin() && validForumThreadUpdateByAdmin()
         ) || (
           isModerator() && validForumThreadUpdateByModerator()
+        ) || (
+          isSignedIn() && validForumThreadCounterSyncUpdate()
         );
 
       allow delete: if isModerator() || (isSignedIn() && request.auth.uid == resource.data.authorUid);
@@ -599,12 +681,14 @@ service cloud.firestore {
       match /comments/{commentId} {
         allow read: if threadExists(threadId)
           && (
-            threadDoc(threadId).data.moderationStatus == 'visible'
+            !('moderationStatus' in threadDoc(threadId).data)
+            || threadDoc(threadId).data.moderationStatus == 'visible'
             || isModerator()
             || (isSignedIn() && threadDoc(threadId).data.authorUid == request.auth.uid)
           )
           && (
-            resource.data.moderationStatus == 'visible'
+            !('moderationStatus' in resource.data)
+            || resource.data.moderationStatus == 'visible'
             || isModerator()
             || (isSignedIn() && request.auth.uid == resource.data.authorUid)
             || (isSignedIn() && threadDoc(threadId).data.authorUid == request.auth.uid)
@@ -627,9 +711,9 @@ service cloud.firestore {
     }
 
     match /forumUserRoles/{uid} {
-      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
-      allow create, update: if isAdmin() && validForumRolePayload();
-      allow delete: if isAdmin();
+      allow read: if hasAdminClaim() || (isSignedIn() && request.auth.uid == uid);
+      allow create, update: if hasAdminClaim() && validForumRolePayload();
+      allow delete: if hasAdminClaim();
     }
 
     match /forumModerationActions/{actionId} {

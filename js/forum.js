@@ -740,6 +740,11 @@ const loadCategories = async () => {
       ),
     );
     docs = snapshot.docs;
+
+    if (!docs.length) {
+      const fallbackSnapshot = await getDocs(categoriesRef);
+      docs = fallbackSnapshot.docs;
+    }
   } catch {
     const fallback = await getDocs(categoriesRef);
     docs = fallback.docs;
