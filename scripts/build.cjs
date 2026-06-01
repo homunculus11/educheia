@@ -118,9 +118,7 @@ async function minifyInlineScripts(html, label) {
       continue;
     }
 
-    const typeMatch = attrs.match(
-      /\btype\s*=\s*["']?([^"'\s>]+)["']?/i,
-    );
+    const typeMatch = attrs.match(/\btype\s*=\s*["']?([^"'\s>]+)["']?/i);
     const type = (typeMatch ? typeMatch[1] : "text/javascript").toLowerCase();
     if (type === "application/ld+json" || type === "application/json") {
       output += full;
