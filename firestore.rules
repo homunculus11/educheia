@@ -5,8 +5,30 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
     function isVerifiedUser() {
       return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isStringBetween(value, minLength, maxLength) {
+      return value is string
+        && value.size() >= minLength
+        && value.size() <= maxLength;
+    }
+
+    function isNonEmptyStringMax(value, maxLength) {
+      return isStringBetween(value, 1, maxLength);
+    }
+
+    function isNonEmptyString(value) {
+      return value is string && value.size() > 0;
+    }
+
+    function isOptionalStringMax(value, maxLength) {
+      return value is string && value.size() <= maxLength;
     }
 
     function rolePath(uid) {
@@ -64,7 +86,7 @@ service cloud.firestore {
     }
 
     function isOwner() {
-      return isSignedIn() && resource.data.authorUid == request.auth.uid;
+      return isSelf(resource.data.authorUid);
     }
 
     function isTrustedCreator(uid) {
@@ -75,48 +97,6 @@ service cloud.firestore {
           && roleDoc(uid).data.reputation is number
           && roleDoc(uid).data.reputation >= 250)
       );
-    }
-
-    function isBanned(uid) {
-      return roleExists(uid)
-        && ('isBanned' in roleDoc(uid).data)
-        && roleDoc(uid).data.isBanned == true;
-    }
-
-    function hasThreadRestriction(uid) {
-      return roleExists(uid)
-        && ('threadRestrictedUntil' in roleDoc(uid).data)
-        && roleDoc(uid).data.threadRestrictedUntil is timestamp
-        && roleDoc(uid).data.threadRestrictedUntil > request.time;
-    }
-
-    function hasCommentRestriction(uid) {
-      return roleExists(uid)
-        && ('commentRestrictedUntil' in roleDoc(uid).data)
-        && roleDoc(uid).data.commentRestrictedUntil is timestamp
-        && roleDoc(uid).data.commentRestrictedUntil > request.time;
-    }
-
-    function hasThreadCooldown(uid) {
-      return roleExists(uid)
-        && ('threadCooldownUntil' in roleDoc(uid).data)
-        && roleDoc(uid).data.threadCooldownUntil is timestamp
-        && roleDoc(uid).data.threadCooldownUntil > request.time;
-    }
-
-    function hasCommentCooldown(uid) {
-      return roleExists(uid)
-        && ('commentCooldownUntil' in roleDoc(uid).data)
-        && roleDoc(uid).data.commentCooldownUntil is timestamp
-        && roleDoc(uid).data.commentCooldownUntil > request.time;
-    }
-
-    function canCreateThread() {
-      return isSignedIn();
-    }
-
-    function canCreateComment() {
-      return isSignedIn();
     }
 
     function canCreateNormalCategory() {
@@ -175,22 +155,28 @@ service cloud.firestore {
       return get(threadPath(threadId));
     }
 
+    function validModerationStatus(value) {
+      return value == 'visible' || value == 'pending' || value == 'hidden';
+    }
+
+    function canReadModeratedContent(authorUid, moderationStatus) {
+      return moderationStatus == 'visible'
+        || isModerator()
+        || isSelf(authorUid);
+    }
+
+    function canReadModeratedDoc(docData) {
+      return !('moderationStatus' in docData)
+        || canReadModeratedContent(docData.authorUid, docData.moderationStatus);
+    }
+
     function threadCanReceiveComments(threadId) {
       return threadExists(threadId)
         && (
           !('isLocked' in threadDoc(threadId).data)
           || threadDoc(threadId).data.isLocked == false
         )
-        && (
-          isModerator()
-          || !('moderationStatus' in threadDoc(threadId).data)
-          || threadDoc(threadId).data.moderationStatus == 'visible'
-          || (isSignedIn() && threadDoc(threadId).data.authorUid == request.auth.uid)
-        );
-    }
-
-    function validModerationStatus(value) {
-      return value == 'visible' || value == 'pending' || value == 'hidden';
+        && canReadModeratedDoc(threadDoc(threadId).data);
     }
 
     function authorEmailMatchesAuthToken(emailValue) {
@@ -202,6 +188,58 @@ service cloud.firestore {
 
     function validCategoryType(value) {
       return value == 'normal' || value == 'admin';
+    }
+
+    function validAuthorIdentityForCreate() {
+      return request.resource.data.authorUid == request.auth.uid
+        && isNonEmptyStringMax(request.resource.data.authorName, 80)
+        && (!('authorEmail' in request.resource.data)
+          || (
+            isOptionalStringMax(request.resource.data.authorEmail, 254)
+            && authorEmailMatchesAuthToken(request.resource.data.authorEmail)
+          ))
+        && request.resource.data.authorIsAdmin == isAdmin();
+    }
+
+    function validThreadTextFields() {
+      return isStringBetween(request.resource.data.title, 6, 160)
+        && isStringBetween(request.resource.data.body, 12, 8000);
+    }
+
+    function validThreadCategoryFields() {
+      return isNonEmptyStringMax(request.resource.data.categoryId, 80)
+        && validCategoryType(request.resource.data.categoryType)
+        && categoryMatchesType(request.resource.data.categoryId, request.resource.data.categoryType);
+    }
+
+    function threadAuthorIdentityUnchanged() {
+      return request.resource.data.authorUid == resource.data.authorUid
+        && request.resource.data.authorName == resource.data.authorName
+        && request.resource.data.authorEmail == resource.data.authorEmail
+        && request.resource.data.authorIsAdmin == resource.data.authorIsAdmin
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function threadOwnerImmutableFieldsUnchanged() {
+      return request.resource.data.categoryId == resource.data.categoryId
+        && request.resource.data.categoryType == resource.data.categoryType
+        && request.resource.data.isSticky == resource.data.isSticky
+        && request.resource.data.isLocked == resource.data.isLocked
+        && request.resource.data.moderationStatus == resource.data.moderationStatus
+        && request.resource.data.commentCount == resource.data.commentCount
+        && request.resource.data.lastActivityAt == resource.data.lastActivityAt;
+    }
+
+    function validCommentBodyField() {
+      return isNonEmptyStringMax(request.resource.data.body, 1500);
+    }
+
+    function commentIdentityUnchanged() {
+      return request.resource.data.authorUid == resource.data.authorUid
+        && request.resource.data.authorName == resource.data.authorName
+        && request.resource.data.authorEmail == resource.data.authorEmail
+        && request.resource.data.authorIsAdmin == resource.data.authorIsAdmin
+        && request.resource.data.createdAt == resource.data.createdAt;
     }
 
     function validForumCategoryPayload() {
@@ -226,21 +264,14 @@ service cloud.firestore {
           'createdAt',
           'updatedAt'
         ])
-        && request.resource.data.name is string
-        && request.resource.data.name.size() >= 2
-        && request.resource.data.name.size() <= 70
-        && request.resource.data.slug is string
-        && request.resource.data.slug.size() >= 2
-        && request.resource.data.slug.size() <= 70
+        && isStringBetween(request.resource.data.name, 2, 70)
+        && isStringBetween(request.resource.data.slug, 2, 70)
         && (!('description' in request.resource.data)
-          || (request.resource.data.description is string
-            && request.resource.data.description.size() <= 280))
+          || isOptionalStringMax(request.resource.data.description, 280))
         && validCategoryType(request.resource.data.type)
         && request.resource.data.isArchived == false
         && request.resource.data.createdByUid == request.auth.uid
-        && request.resource.data.createdByName is string
-        && request.resource.data.createdByName.size() > 0
-        && request.resource.data.createdByName.size() <= 80
+        && isNonEmptyStringMax(request.resource.data.createdByName, 80)
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
     }
@@ -279,28 +310,9 @@ service cloud.firestore {
           'updatedAt',
           'lastActivityAt'
         ])
-        && request.resource.data.title is string
-        && request.resource.data.title.size() >= 6
-        && request.resource.data.title.size() <= 160
-        && request.resource.data.body is string
-        && request.resource.data.body.size() >= 12
-        && request.resource.data.body.size() <= 8000
-        && request.resource.data.categoryId is string
-        && request.resource.data.categoryId.size() > 0
-        && request.resource.data.categoryId.size() <= 80
-        && validCategoryType(request.resource.data.categoryType)
-        && categoryMatchesType(request.resource.data.categoryId, request.resource.data.categoryType)
-        && request.resource.data.authorUid == request.auth.uid
-        && request.resource.data.authorName is string
-        && request.resource.data.authorName.size() > 0
-        && request.resource.data.authorName.size() <= 80
-        && (!('authorEmail' in request.resource.data)
-          || (
-            request.resource.data.authorEmail is string
-            && request.resource.data.authorEmail.size() <= 254
-            && authorEmailMatchesAuthToken(request.resource.data.authorEmail)
-          ))
-        && request.resource.data.authorIsAdmin == isAdmin()
+        && validThreadTextFields()
+        && validThreadCategoryFields()
+        && validAuthorIdentityForCreate()
         && request.resource.data.isSticky is bool
         && (!request.resource.data.isSticky || isAdmin())
         && request.resource.data.isLocked == false
@@ -319,25 +331,10 @@ service cloud.firestore {
           'body',
           'updatedAt'
         ])
-        && request.resource.data.title is string
-        && request.resource.data.title.size() >= 6
-        && request.resource.data.title.size() <= 160
-        && request.resource.data.body is string
-        && request.resource.data.body.size() >= 12
-        && request.resource.data.body.size() <= 8000
+        && validThreadTextFields()
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.authorUid == resource.data.authorUid
-        && request.resource.data.authorName == resource.data.authorName
-        && request.resource.data.authorEmail == resource.data.authorEmail
-        && request.resource.data.authorIsAdmin == resource.data.authorIsAdmin
-        && request.resource.data.categoryId == resource.data.categoryId
-        && request.resource.data.categoryType == resource.data.categoryType
-        && request.resource.data.isSticky == resource.data.isSticky
-        && request.resource.data.isLocked == resource.data.isLocked
-        && request.resource.data.moderationStatus == resource.data.moderationStatus
-        && request.resource.data.commentCount == resource.data.commentCount
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.lastActivityAt == resource.data.lastActivityAt
+        && threadAuthorIdentityUnchanged()
+        && threadOwnerImmutableFieldsUnchanged()
         && resource.data.isLocked != true;
     }
 
@@ -354,17 +351,8 @@ service cloud.firestore {
           'updatedAt',
           'lastActivityAt'
         ])
-        && request.resource.data.title is string
-        && request.resource.data.title.size() >= 6
-        && request.resource.data.title.size() <= 160
-        && request.resource.data.body is string
-        && request.resource.data.body.size() >= 12
-        && request.resource.data.body.size() <= 8000
-        && request.resource.data.categoryId is string
-        && request.resource.data.categoryId.size() > 0
-        && request.resource.data.categoryId.size() <= 80
-        && validCategoryType(request.resource.data.categoryType)
-        && categoryMatchesType(request.resource.data.categoryId, request.resource.data.categoryType)
+        && validThreadTextFields()
+        && validThreadCategoryFields()
         && request.resource.data.isSticky is bool
         && request.resource.data.isLocked is bool
         && validModerationStatus(request.resource.data.moderationStatus)
@@ -372,11 +360,7 @@ service cloud.firestore {
         && request.resource.data.commentCount >= 0
         && request.resource.data.updatedAt == request.time
         && request.resource.data.lastActivityAt is timestamp
-        && request.resource.data.authorUid == resource.data.authorUid
-        && request.resource.data.authorName == resource.data.authorName
-        && request.resource.data.authorEmail == resource.data.authorEmail
-        && request.resource.data.authorIsAdmin == resource.data.authorIsAdmin
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && threadAuthorIdentityUnchanged();
     }
 
     function validForumThreadUpdateByModerator() {
@@ -391,17 +375,8 @@ service cloud.firestore {
           'updatedAt',
           'lastActivityAt'
         ])
-        && request.resource.data.title is string
-        && request.resource.data.title.size() >= 6
-        && request.resource.data.title.size() <= 160
-        && request.resource.data.body is string
-        && request.resource.data.body.size() >= 12
-        && request.resource.data.body.size() <= 8000
-        && request.resource.data.categoryId is string
-        && request.resource.data.categoryId.size() > 0
-        && request.resource.data.categoryId.size() <= 80
-        && validCategoryType(request.resource.data.categoryType)
-        && categoryMatchesType(request.resource.data.categoryId, request.resource.data.categoryType)
+        && validThreadTextFields()
+        && validThreadCategoryFields()
         && request.resource.data.isSticky == resource.data.isSticky
         && request.resource.data.isLocked is bool
         && validModerationStatus(request.resource.data.moderationStatus)
@@ -409,11 +384,7 @@ service cloud.firestore {
         && request.resource.data.commentCount >= 0
         && request.resource.data.updatedAt == request.time
         && request.resource.data.lastActivityAt is timestamp
-        && request.resource.data.authorUid == resource.data.authorUid
-        && request.resource.data.authorName == resource.data.authorName
-        && request.resource.data.authorEmail == resource.data.authorEmail
-        && request.resource.data.authorIsAdmin == resource.data.authorIsAdmin
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && threadAuthorIdentityUnchanged();
     }
 
     function validForumThreadCounterSyncUpdate() {
@@ -445,12 +416,7 @@ service cloud.firestore {
         )
         && request.resource.data.updatedAt == request.time
         && request.resource.data.lastActivityAt == request.time
-        && (
-          !('moderationStatus' in resource.data)
-          || resource.data.moderationStatus == 'visible'
-          || isModerator()
-          || (isSignedIn() && request.auth.uid == resource.data.authorUid)
-        );
+        && canReadModeratedDoc(resource.data);
     }
 
     function validForumCommentPayload() {
@@ -473,20 +439,8 @@ service cloud.firestore {
           'createdAt',
           'updatedAt'
         ])
-        && request.resource.data.body is string
-        && request.resource.data.body.size() > 0
-        && request.resource.data.body.size() <= 1500
-        && request.resource.data.authorUid == request.auth.uid
-        && request.resource.data.authorName is string
-        && request.resource.data.authorName.size() > 0
-        && request.resource.data.authorName.size() <= 80
-        && (!('authorEmail' in request.resource.data)
-          || (
-            request.resource.data.authorEmail is string
-            && request.resource.data.authorEmail.size() <= 254
-            && authorEmailMatchesAuthToken(request.resource.data.authorEmail)
-          ))
-        && request.resource.data.authorIsAdmin == isAdmin()
+        && validCommentBodyField()
+        && validAuthorIdentityForCreate()
         && validModerationStatus(request.resource.data.moderationStatus)
         && (isAdmin() || request.resource.data.moderationStatus != 'hidden')
         && request.resource.data.createdAt == request.time
@@ -498,16 +452,10 @@ service cloud.firestore {
           'body',
           'updatedAt'
         ])
-        && request.resource.data.body is string
-        && request.resource.data.body.size() > 0
-        && request.resource.data.body.size() <= 1500
+        && validCommentBodyField()
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.authorUid == resource.data.authorUid
-        && request.resource.data.authorName == resource.data.authorName
-        && request.resource.data.authorEmail == resource.data.authorEmail
-        && request.resource.data.authorIsAdmin == resource.data.authorIsAdmin
-        && request.resource.data.moderationStatus == resource.data.moderationStatus
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && commentIdentityUnchanged()
+        && request.resource.data.moderationStatus == resource.data.moderationStatus;
     }
 
     function validForumCommentUpdateByModerator() {
@@ -516,16 +464,10 @@ service cloud.firestore {
           'moderationStatus',
           'updatedAt'
         ])
-        && request.resource.data.body is string
-        && request.resource.data.body.size() > 0
-        && request.resource.data.body.size() <= 1500
+        && validCommentBodyField()
         && validModerationStatus(request.resource.data.moderationStatus)
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.authorUid == resource.data.authorUid
-        && request.resource.data.authorName == resource.data.authorName
-        && request.resource.data.authorEmail == resource.data.authorEmail
-        && request.resource.data.authorIsAdmin == resource.data.authorIsAdmin
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && commentIdentityUnchanged();
     }
 
     function validForumRolePayload() {
@@ -562,8 +504,7 @@ service cloud.firestore {
         && (!('commentCooldownUntil' in request.resource.data)
           || request.resource.data.commentCooldownUntil is timestamp)
         && (!('reason' in request.resource.data)
-          || (request.resource.data.reason is string
-            && request.resource.data.reason.size() <= 300))
+          || isOptionalStringMax(request.resource.data.reason, 300))
         && request.resource.data.updatedAt == request.time
         && request.resource.data.updatedByUid == request.auth.uid;
     }
@@ -585,18 +526,14 @@ service cloud.firestore {
           'createdAt',
           'createdByUid'
         ])
-        && request.resource.data.actionType is string
-        && request.resource.data.actionType.size() > 0
-        && request.resource.data.actionType.size() <= 60
-        && request.resource.data.targetUid is string
-        && request.resource.data.targetUid.size() > 0
-        && request.resource.data.targetUid.size() <= 128
+        && isNonEmptyStringMax(request.resource.data.actionType, 60)
+        && isNonEmptyStringMax(request.resource.data.targetUid, 128)
         && (!('threadId' in request.resource.data)
-          || (request.resource.data.threadId is string && request.resource.data.threadId.size() > 0))
+          || isNonEmptyString(request.resource.data.threadId))
         && (!('commentId' in request.resource.data)
-          || (request.resource.data.commentId is string && request.resource.data.commentId.size() > 0))
+          || isNonEmptyString(request.resource.data.commentId))
         && (!('reason' in request.resource.data)
-          || (request.resource.data.reason is string && request.resource.data.reason.size() <= 300))
+          || isOptionalStringMax(request.resource.data.reason, 300))
         && (!('details' in request.resource.data)
           || request.resource.data.details is map)
         && request.resource.data.createdAt == request.time
@@ -610,23 +547,17 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           'body', 'authorUid', 'authorName', 'authorEmail', 'createdAt'
         ])
-        && request.resource.data.body is string
-        && request.resource.data.body.size() > 0
-        && request.resource.data.body.size() <= 500
+        && isNonEmptyStringMax(request.resource.data.body, 500)
         && request.resource.data.authorUid == request.auth.uid
-        && request.resource.data.authorName is string
-        && request.resource.data.authorName.size() > 0
-        && request.resource.data.authorName.size() <= 80
+        && isNonEmptyStringMax(request.resource.data.authorName, 80)
         && (!('authorEmail' in request.resource.data)
-            || request.resource.data.authorEmail == request.auth.token.email)
+          || request.resource.data.authorEmail == request.auth.token.email)
         && request.resource.data.createdAt == request.time;
 
       allow update: if isAdmin() || (
         isOwner()
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(['body'])
-        && request.resource.data.body is string
-        && request.resource.data.body.size() > 0
-        && request.resource.data.body.size() <= 500
+        && isNonEmptyStringMax(request.resource.data.body, 500)
         && request.resource.data.authorUid == resource.data.authorUid
         && request.resource.data.authorName == resource.data.authorName
         && request.resource.data.authorEmail == resource.data.authorEmail
@@ -650,14 +581,9 @@ service cloud.firestore {
     }
 
     match /forumThreads/{threadId} {
-      allow read: if (
-          !('moderationStatus' in resource.data)
-          || resource.data.moderationStatus == 'visible'
-          || isModerator()
-          || (isSignedIn() && request.auth.uid == resource.data.authorUid)
-        );
+      allow read: if canReadModeratedDoc(resource.data);
 
-      allow create: if canCreateThread()
+      allow create: if isSignedIn()
         && validForumThreadCreatePayload()
         && (
           request.resource.data.categoryType == 'normal'
@@ -665,8 +591,7 @@ service cloud.firestore {
         );
 
       allow update: if (
-          isSignedIn()
-          && request.auth.uid == resource.data.authorUid
+          isSelf(resource.data.authorUid)
           && validForumThreadUpdateByOwner()
         ) || (
           isAdmin() && validForumThreadUpdateByAdmin()
@@ -676,42 +601,36 @@ service cloud.firestore {
           isSignedIn() && validForumThreadCounterSyncUpdate()
         );
 
-      allow delete: if isModerator() || (isSignedIn() && request.auth.uid == resource.data.authorUid);
+      allow delete: if isModerator() || isSelf(resource.data.authorUid);
 
       match /comments/{commentId} {
         allow read: if threadExists(threadId)
-          && (
-            !('moderationStatus' in threadDoc(threadId).data)
-            || threadDoc(threadId).data.moderationStatus == 'visible'
-            || isModerator()
-            || (isSignedIn() && threadDoc(threadId).data.authorUid == request.auth.uid)
-          )
+          && canReadModeratedDoc(threadDoc(threadId).data)
           && (
             !('moderationStatus' in resource.data)
             || resource.data.moderationStatus == 'visible'
             || isModerator()
-            || (isSignedIn() && request.auth.uid == resource.data.authorUid)
-            || (isSignedIn() && threadDoc(threadId).data.authorUid == request.auth.uid)
+            || isSelf(resource.data.authorUid)
+            || isSelf(threadDoc(threadId).data.authorUid)
           );
 
-        allow create: if canCreateComment()
+        allow create: if isSignedIn()
           && threadCanReceiveComments(threadId)
           && validForumCommentPayload();
 
         allow update: if (
-            isSignedIn()
-            && request.auth.uid == resource.data.authorUid
+            isSelf(resource.data.authorUid)
             && validForumCommentUpdateByOwner()
           ) || (
             isModerator() && validForumCommentUpdateByModerator()
           );
 
-        allow delete: if isModerator() || (isSignedIn() && request.auth.uid == resource.data.authorUid);
+        allow delete: if isModerator() || isSelf(resource.data.authorUid);
       }
     }
 
     match /forumUserRoles/{uid} {
-      allow read: if hasAdminClaim() || (isSignedIn() && request.auth.uid == uid);
+      allow read: if hasAdminClaim() || isSelf(uid);
       allow create, update: if hasAdminClaim() && validForumRolePayload();
       allow delete: if hasAdminClaim();
     }
