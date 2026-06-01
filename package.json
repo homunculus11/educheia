@@ -8,7 +8,7 @@
     "run": "node ./scripts/dev-server.cjs --root dist --port 4173",
     "build": "node ./scripts/build.cjs",
     "build:images": "node ./scripts/generate-responsive-images.cjs",
-    "build:css": "node ./scripts/tailwind-auto.cjs build --concurrency 7",
+    "build:css": "node ./scripts/tailwind-auto.cjs build --concurrency 8",
     "watch:css": "node ./scripts/tailwind-auto.cjs watch"
   },
   "devDependencies": {

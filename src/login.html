@@ -1,101 +1,175 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ro">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Autentificare în contul Educheia pentru comentarii, personalizare și funcții de cont.">
-    <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
-    <meta name="author" content="Educheia">
-    <meta name="theme-color" content="#0f1524">
-    <meta name="format-detection" content="telephone=no">
-    <link rel="canonical" href="https://educheia.md/login">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Autentificare în contul Educheia pentru comentarii, personalizare și funcții de cont."
+    />
+    <meta name="robots" content="noindex,nofollow,noarchive,nosnippet" />
+    <meta name="author" content="Educheia" />
+    <meta name="theme-color" content="#0f1524" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="canonical" href="https://educheia.md/login" />
     <title>Login Educheia</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/styles.css">
-    <link rel="stylesheet" href="../css/login.css">
-    <link rel="apple-touch-icon" sizes="180x180" href="../images/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="../images/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="../images/favicon-16x16.png">
-    <link rel="icon" href="../images/favicon.ico" sizes="any">
-    <link rel="manifest" href="../images/site.webmanifest">
-</head>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/styles.css" />
+    <link rel="stylesheet" href="../css/login.css" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="../images/apple-touch-icon.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="../images/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="../images/favicon-16x16.png"
+    />
+    <link rel="icon" href="../images/favicon.ico" sizes="any" />
+    <link rel="manifest" href="../images/site.webmanifest" />
+  </head>
 
-<body data-theme="dark">
+  <body data-theme="dark">
     <nav class="site-header">
-        <div class="header-left">
-            <a href="/" class="logo-link">
-                <picture>
-                    <source srcset="../images/logo-dark-h54.webp 1x, ../images/logo-dark-h108.webp 2x" media="(prefers-color-scheme: light)">
-                    <source srcset="../images/logo-light-h54.webp 1x, ../images/logo-light-h108.webp 2x" media="(prefers-color-scheme: dark)">
-                    <img id="header-logo" src="../images/logo-light-h54.webp" alt="Educheia Logo" width="179" height="54" decoding="async">
-                </picture>
-            </a>
-            
-            <button class="menu-toggle" type="button" aria-expanded="false" aria-label="Toggle navigation">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
+      <div class="header-left">
+        <a href="/" class="logo-link">
+          <picture>
+            <source
+              srcset="
+                ../images/logo-dark-h54.webp  1x,
+                ../images/logo-dark-h108.webp 2x
+              "
+              media="(prefers-color-scheme: light)"
+            />
+            <source
+              srcset="
+                ../images/logo-light-h54.webp  1x,
+                ../images/logo-light-h108.webp 2x
+              "
+              media="(prefers-color-scheme: dark)"
+            />
+            <img
+              id="header-logo"
+              src="../images/logo-light-h54.webp"
+              alt="Educheia Logo"
+              width="179"
+              height="54"
+              decoding="async"
+            />
+          </picture>
+        </a>
+
+        <button
+          class="menu-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+
+      <div id="header-drawer" class="header-drawer">
+        <ul id="header-items" class="header-items">
+          <li>
+            <a href="/" class="header-item">Acasă</a>
+          </li>
+
+          <li>
+            <a href="/episodes" class="header-item">Toate Episoadele</a>
+          </li>
+
+          <li>
+            <a href="/about" class="header-item">Despre</a>
+          </li>
+
+          <li>
+            <a href="/forum" class="header-item">Forum</a>
+          </li>
+        </ul>
+
+        <div id="header-btns" class="header-btns auth-pending">
+          <a href="/login" id="login-btn">Login</a>
+          <a href="/register" id="signup-btn">Signup</a>
         </div>
-        
-        <div id="header-drawer" class="header-drawer">
-            <ul id="header-items" class="header-items">
-                <li>
-                    <a href="/" class="header-item">Acasă</a>
-                </li>
+      </div>
 
-                <li>
-                    <a href="/episodes" class="header-item">Toate Episoadele</a>
-                </li>
-                
-                <li>
-                    <a href="/about" class="header-item">Despre</a>
-                </li>
-            </ul>
-
-            <div id="header-btns" class="header-btns auth-pending">
-                <a href="/login" id="login-btn">Login</a>
-                <a href="/register" id="signup-btn">Signup</a>
-            </div>
-        </div>
-
-        <div class="header-overlay" aria-hidden="true"></div>
+      <div class="header-overlay" aria-hidden="true"></div>
     </nav>
 
     <main>
-        <section class="main-login-box">
-            <form class="login-form" action="#" method="post">
-                <h1 class="text-2xl font-bold text-center mb-6">Login</h1>
+      <section class="main-login-box">
+        <form class="login-form" action="#" method="post">
+          <h1 class="text-2xl font-bold text-center mb-6">Login</h1>
 
-                <label for="user" class="block text-sm font-medium text-text-secondary mb-1">Username ori email</label>
-                <input id="user" name="user" type="text" autocomplete="username" required>
+          <label
+            for="user"
+            class="block text-sm font-medium text-text-secondary mb-1"
+            >Username ori email</label
+          >
+          <input
+            id="user"
+            name="user"
+            type="text"
+            autocomplete="username"
+            required
+          />
 
-                <label for="password" class="block text-sm font-medium text-text-secondary mb-1">Parola</label>
-                <input id="password" name="password" type="password" autocomplete="current-password" required>
+          <label
+            for="password"
+            class="block text-sm font-medium text-text-secondary mb-1"
+            >Parola</label
+          >
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
 
-                <button type="submit" class="btn btn-primary w-full">Sign In</button>
+          <button type="submit" class="btn btn-primary w-full">Sign In</button>
 
-                <div class="my-4 text-center text-text-secondary">or</div>
+          <div class="my-4 text-center text-text-secondary">or</div>
 
-                <button type="button" class="btn-google">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512" fill="currentColor" aria-hidden="true" focusable="false"><path d="M488 261.8c0-17.4-1.4-34.1-4-50.3H249v95.2h134.9c-5.8 31.7-23.4 58.6-49.8 76.5v63.6h80.6c47.4-43.7 75.3-108 75.3-184.9zM249 511c67.2 0 123.8-22.2 165.1-60.4l-80.6-63.6c-22.4 15-51 23.9-84.5 23.9-64.9 0-120-43.8-139.7-102.6h-82.9v64.4C62.9 456.9 149.4 511 249 511zM109.3 303.3c-4.8-14.4-7.6-29.7-7.6-45.3s2.8-30.9 7.6-45.3v-64.4h-82.9C14.6 199.4 0 225.5 0 259.9s14.6 60.5 36.4 85.3l82.9-64.4zM249 101.5c35.8 0 68 12.3 93.3 36.4l69.9-69.9C371.7 24.6 315.1 0 249 0 149.4 0 62.9 54.1 36.4 135.4l82.9 64.4c19.7-58.8 74.8-102.6 139.7-102.6z"/></svg>
-                    Sign in with Google
-                </button>
-            </form>
-        </section>
+          <button type="button" class="btn-google">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 488 512"
+              fill="currentColor"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M488 261.8c0-17.4-1.4-34.1-4-50.3H249v95.2h134.9c-5.8 31.7-23.4 58.6-49.8 76.5v63.6h80.6c47.4-43.7 75.3-108 75.3-184.9zM249 511c67.2 0 123.8-22.2 165.1-60.4l-80.6-63.6c-22.4 15-51 23.9-84.5 23.9-64.9 0-120-43.8-139.7-102.6h-82.9v64.4C62.9 456.9 149.4 511 249 511zM109.3 303.3c-4.8-14.4-7.6-29.7-7.6-45.3s2.8-30.9 7.6-45.3v-64.4h-82.9C14.6 199.4 0 225.5 0 259.9s14.6 60.5 36.4 85.3l82.9-64.4zM249 101.5c35.8 0 68 12.3 93.3 36.4l69.9-69.9C371.7 24.6 315.1 0 249 0 149.4 0 62.9 54.1 36.4 135.4l82.9 64.4c19.7-58.8 74.8-102.6 139.7-102.6z"
+              />
+            </svg>
+            Sign in with Google
+          </button>
+        </form>
+      </section>
     </main>
 
-    <footer class="site-footer">
-        
-    </footer>
+    <footer class="site-footer"></footer>
 
     <script src="../js/script.js"></script>
     <script type="module" src="../js/account-nav.js"></script>
     <!-- Firebase authentication -->
     <script type="module" src="../js/login.js"></script>
-</body>
-
+  </body>
 </html>

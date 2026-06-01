@@ -1,0 +1,753 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isStringBetween(value, minLength, maxLength) {
+      return value is string
+        && value.size() >= minLength
+        && value.size() <= maxLength;
+    }
+
+    function isNonEmptyStringMax(value, maxLength) {
+      return isStringBetween(value, 1, maxLength);
+    }
+
+    function isNonEmptyString(value) {
+      return value is string && value.size() > 0;
+    }
+
+    function isOptionalStringMax(value, maxLength) {
+      return value is string && value.size() <= maxLength;
+    }
+
+    function rolePath(uid) {
+      return /databases/$(database)/documents/forumUserRoles/$(uid);
+    }
+
+    function roleExists(uid) {
+      return exists(rolePath(uid));
+    }
+
+    function roleDoc(uid) {
+      return get(rolePath(uid));
+    }
+
+    function validForumRoleValue(role) {
+      return role == 'member' || role == 'moderator' || role == 'admin';
+    }
+
+    function storedForumRole(uid) {
+      return roleExists(uid)
+        && ('role' in roleDoc(uid).data)
+        && roleDoc(uid).data.role is string
+        && validForumRoleValue(roleDoc(uid).data.role)
+          ? roleDoc(uid).data.role
+          : 'member';
+    }
+
+    function hasAdminClaim() {
+      return isSignedIn() && (
+        (('admin' in request.auth.token) && request.auth.token.admin == true)
+        || (('role' in request.auth.token) && request.auth.token.role == 'admin')
+      );
+    }
+
+    function hasModeratorClaim() {
+      return isSignedIn() && (
+        (('moderator' in request.auth.token) && request.auth.token.moderator == true)
+        || (('role' in request.auth.token) && request.auth.token.role == 'moderator')
+      );
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        hasAdminClaim()
+        || storedForumRole(request.auth.uid) == 'admin'
+      );
+    }
+
+    function isModerator() {
+      return isSignedIn() && (
+        isAdmin()
+        || hasModeratorClaim()
+        || storedForumRole(request.auth.uid) == 'moderator'
+      );
+    }
+
+    function isOwner() {
+      return isSelf(resource.data.authorUid);
+    }
+
+    function isTrustedCreator(uid) {
+      return roleExists(uid) && (
+        (('trustedCreator' in roleDoc(uid).data) && roleDoc(uid).data.trustedCreator == true)
+        ||
+        (('reputation' in roleDoc(uid).data)
+          && roleDoc(uid).data.reputation is number
+          && roleDoc(uid).data.reputation >= 250)
+      );
+    }
+
+    function canCreateNormalCategory() {
+      return isAdmin() || (isVerifiedUser() && isTrustedCreator(request.auth.uid));
+    }
+
+    function categoryPath(categoryId) {
+      return /databases/$(database)/documents/forumCategories/$(categoryId);
+    }
+
+    function categoryExists(categoryId) {
+      return exists(categoryPath(categoryId));
+    }
+
+    function categoryDoc(categoryId) {
+      return get(categoryPath(categoryId));
+    }
+
+    function categoryIsActive(categoryId) {
+      return categoryExists(categoryId)
+        && (
+          !('isArchived' in categoryDoc(categoryId).data)
+          || categoryDoc(categoryId).data.isArchived == false
+        );
+    }
+
+    function categoryMatchesType(categoryId, categoryType) {
+      return categoryIsActive(categoryId)
+        && (
+          (
+            'type' in categoryDoc(categoryId).data
+            && (
+              categoryDoc(categoryId).data.type == categoryType
+              || (
+                categoryDoc(categoryId).data.type != 'admin'
+                && categoryType == 'normal'
+              )
+            )
+          )
+          || (
+            !('type' in categoryDoc(categoryId).data)
+            && categoryType == 'normal'
+          )
+        );
+    }
+
+    function threadPath(threadId) {
+      return /databases/$(database)/documents/forumThreads/$(threadId);
+    }
+
+    function threadExists(threadId) {
+      return exists(threadPath(threadId));
+    }
+
+    function threadDoc(threadId) {
+      return get(threadPath(threadId));
+    }
+
+    function validModerationStatus(value) {
+      return value == 'visible' || value == 'pending' || value == 'hidden';
+    }
+
+    function canReadModeratedContent(authorUid, moderationStatus) {
+      return moderationStatus == 'visible'
+        || isModerator()
+        || isSelf(authorUid);
+    }
+
+    function canReadModeratedDoc(docData) {
+      return !('moderationStatus' in docData)
+        || canReadModeratedContent(docData.authorUid, docData.moderationStatus);
+    }
+
+    function threadCanReceiveComments(threadId) {
+      return threadExists(threadId)
+        && (
+          !('isLocked' in threadDoc(threadId).data)
+          || threadDoc(threadId).data.isLocked == false
+        )
+        && canReadModeratedDoc(threadDoc(threadId).data);
+    }
+
+    function userIsBanned(uid) {
+      return roleExists(uid)
+        && ('isBanned' in roleDoc(uid).data)
+        && roleDoc(uid).data.isBanned == true;
+    }
+
+    function hasActiveThreadRestriction(uid) {
+      return roleExists(uid)
+        && (
+          (
+            ('threadRestrictedUntil' in roleDoc(uid).data)
+            && roleDoc(uid).data.threadRestrictedUntil is timestamp
+            && roleDoc(uid).data.threadRestrictedUntil > request.time
+          )
+          || (
+            ('threadCooldownUntil' in roleDoc(uid).data)
+            && roleDoc(uid).data.threadCooldownUntil is timestamp
+            && roleDoc(uid).data.threadCooldownUntil > request.time
+          )
+        );
+    }
+
+    function hasActiveCommentRestriction(uid) {
+      return roleExists(uid)
+        && (
+          (
+            ('commentRestrictedUntil' in roleDoc(uid).data)
+            && roleDoc(uid).data.commentRestrictedUntil is timestamp
+            && roleDoc(uid).data.commentRestrictedUntil > request.time
+          )
+          || (
+            ('commentCooldownUntil' in roleDoc(uid).data)
+            && roleDoc(uid).data.commentCooldownUntil is timestamp
+            && roleDoc(uid).data.commentCooldownUntil > request.time
+          )
+        );
+    }
+
+    function canCreateThreadByUser(uid) {
+      return !userIsBanned(uid)
+        && !hasActiveThreadRestriction(uid);
+    }
+
+    function canCreateCommentByUser(uid) {
+      return !userIsBanned(uid)
+        && !hasActiveCommentRestriction(uid);
+    }
+
+    function authorEmailMatchesAuthToken(emailValue) {
+      return !('email' in request.auth.token)
+        || !(request.auth.token.email is string)
+        || request.auth.token.email.size() == 0
+        || emailValue.lower() == request.auth.token.email.lower();
+    }
+
+    function validCategoryType(value) {
+      return value == 'normal' || value == 'admin';
+    }
+
+    function validAuthorIdentityForCreate() {
+      return request.resource.data.authorUid == request.auth.uid
+        && isNonEmptyStringMax(request.resource.data.authorName, 80)
+        && (!('authorEmail' in request.resource.data)
+          || (
+            isOptionalStringMax(request.resource.data.authorEmail, 254)
+            && authorEmailMatchesAuthToken(request.resource.data.authorEmail)
+          ))
+        && request.resource.data.authorIsAdmin == isAdmin();
+    }
+
+    function validThreadTextFields() {
+      return isStringBetween(request.resource.data.title, 6, 160)
+        && isStringBetween(request.resource.data.body, 12, 8000);
+    }
+
+    function validThreadCategoryFields() {
+      return isNonEmptyStringMax(request.resource.data.categoryId, 80)
+        && validCategoryType(request.resource.data.categoryType)
+        && categoryMatchesType(request.resource.data.categoryId, request.resource.data.categoryType);
+    }
+
+    function threadAuthorIdentityUnchanged() {
+      return request.resource.data.authorUid == resource.data.authorUid
+        && request.resource.data.authorName == resource.data.authorName
+        && request.resource.data.authorEmail == resource.data.authorEmail
+        && request.resource.data.authorIsAdmin == resource.data.authorIsAdmin
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function threadOwnerImmutableFieldsUnchanged() {
+      return request.resource.data.categoryId == resource.data.categoryId
+        && request.resource.data.categoryType == resource.data.categoryType
+        && request.resource.data.isSticky == resource.data.isSticky
+        && request.resource.data.isLocked == resource.data.isLocked
+        && request.resource.data.moderationStatus == resource.data.moderationStatus
+        && request.resource.data.commentCount == resource.data.commentCount
+        && request.resource.data.lastActivityAt == resource.data.lastActivityAt;
+    }
+
+    function validCommentBodyField() {
+      return isNonEmptyStringMax(request.resource.data.body, 1500);
+    }
+
+    function commentIdentityUnchanged() {
+      return request.resource.data.authorUid == resource.data.authorUid
+        && request.resource.data.authorName == resource.data.authorName
+        && request.resource.data.authorEmail == resource.data.authorEmail
+        && request.resource.data.authorIsAdmin == resource.data.authorIsAdmin
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function validForumCategoryPayload() {
+      return request.resource.data.keys().hasOnly([
+          'name',
+          'slug',
+          'description',
+          'type',
+          'isArchived',
+          'createdByUid',
+          'createdByName',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'name',
+          'slug',
+          'type',
+          'isArchived',
+          'createdByUid',
+          'createdByName',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isStringBetween(request.resource.data.name, 2, 70)
+        && isStringBetween(request.resource.data.slug, 2, 70)
+        && (!('description' in request.resource.data)
+          || isOptionalStringMax(request.resource.data.description, 280))
+        && validCategoryType(request.resource.data.type)
+        && request.resource.data.isArchived == false
+        && request.resource.data.createdByUid == request.auth.uid
+        && isNonEmptyStringMax(request.resource.data.createdByName, 80)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validForumThreadCreatePayload() {
+      return request.resource.data.keys().hasOnly([
+          'title',
+          'body',
+          'categoryId',
+          'categoryType',
+          'authorUid',
+          'authorName',
+          'authorEmail',
+          'authorIsAdmin',
+          'isSticky',
+          'isLocked',
+          'moderationStatus',
+          'commentCount',
+          'createdAt',
+          'updatedAt',
+          'lastActivityAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'title',
+          'body',
+          'categoryId',
+          'categoryType',
+          'authorUid',
+          'authorName',
+          'authorIsAdmin',
+          'isSticky',
+          'isLocked',
+          'moderationStatus',
+          'commentCount',
+          'createdAt',
+          'updatedAt',
+          'lastActivityAt'
+        ])
+        && validThreadTextFields()
+        && validThreadCategoryFields()
+        && validAuthorIdentityForCreate()
+        && request.resource.data.isSticky is bool
+        && (!request.resource.data.isSticky || isAdmin())
+        && request.resource.data.isLocked == false
+        && validModerationStatus(request.resource.data.moderationStatus)
+        && (isAdmin() || request.resource.data.moderationStatus != 'hidden')
+        && request.resource.data.commentCount is number
+        && request.resource.data.commentCount == 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastActivityAt == request.time;
+    }
+
+    function validForumThreadUpdateByOwner() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'title',
+          'body',
+          'updatedAt'
+        ])
+        && validThreadTextFields()
+        && request.resource.data.updatedAt == request.time
+        && threadAuthorIdentityUnchanged()
+        && threadOwnerImmutableFieldsUnchanged()
+        && resource.data.isLocked != true;
+    }
+
+    function validForumThreadUpdateByAdmin() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'categoryId',
+          'categoryType',
+          'isSticky',
+          'isLocked',
+          'moderationStatus',
+          'commentCount',
+          'updatedAt',
+          'lastActivityAt'
+        ])
+        && validThreadCategoryFields()
+        && request.resource.data.isSticky is bool
+        && request.resource.data.isLocked is bool
+        && validModerationStatus(request.resource.data.moderationStatus)
+        && request.resource.data.commentCount is number
+        && request.resource.data.commentCount >= 0
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastActivityAt is timestamp
+        && threadAuthorIdentityUnchanged();
+    }
+
+    function validForumThreadUpdateByModerator() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'isLocked',
+          'moderationStatus',
+          'commentCount',
+          'updatedAt',
+          'lastActivityAt'
+        ])
+        && request.resource.data.categoryId == resource.data.categoryId
+        && request.resource.data.categoryType == resource.data.categoryType
+        && request.resource.data.isSticky == resource.data.isSticky
+        && request.resource.data.isLocked is bool
+        && validModerationStatus(request.resource.data.moderationStatus)
+        && request.resource.data.commentCount is number
+        && request.resource.data.commentCount >= 0
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastActivityAt is timestamp
+        && threadAuthorIdentityUnchanged();
+    }
+
+    function validForumThreadCounterSyncUpdate() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'commentCount',
+          'updatedAt',
+          'lastActivityAt'
+        ])
+        && request.resource.data.commentCount is number
+        && request.resource.data.commentCount >= 0
+        && (
+          (
+            'commentCount' in resource.data
+            && resource.data.commentCount is number
+            && (
+              request.resource.data.commentCount == resource.data.commentCount + 1
+              || request.resource.data.commentCount == resource.data.commentCount - 1
+            )
+          )
+          || (
+            !('commentCount' in resource.data)
+            && request.resource.data.commentCount == 1
+          )
+          || (
+            'commentCount' in resource.data
+            && !(resource.data.commentCount is number)
+            && request.resource.data.commentCount >= 0
+          )
+        )
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastActivityAt == request.time
+        && canReadModeratedDoc(resource.data);
+    }
+
+    function validForumCommentPayload() {
+      return request.resource.data.keys().hasOnly([
+          'body',
+          'authorUid',
+          'authorName',
+          'authorEmail',
+          'authorIsAdmin',
+          'moderationStatus',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'body',
+          'authorUid',
+          'authorName',
+          'authorIsAdmin',
+          'moderationStatus',
+          'createdAt',
+          'updatedAt'
+        ])
+        && validCommentBodyField()
+        && validAuthorIdentityForCreate()
+        && validModerationStatus(request.resource.data.moderationStatus)
+        && (isAdmin() || request.resource.data.moderationStatus != 'hidden')
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validForumCommentUpdateByOwner() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'body',
+          'updatedAt'
+        ])
+        && validCommentBodyField()
+        && request.resource.data.updatedAt == request.time
+        && commentIdentityUnchanged()
+        && request.resource.data.moderationStatus == resource.data.moderationStatus;
+    }
+
+    function validForumCommentUpdateByModerator() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'moderationStatus',
+          'updatedAt'
+        ])
+        && validModerationStatus(request.resource.data.moderationStatus)
+        && request.resource.data.updatedAt == request.time
+        && commentIdentityUnchanged();
+    }
+
+    function validForumRolePayload() {
+      return request.resource.data.keys().hasOnly([
+          'role',
+          'trustedCreator',
+          'reputation',
+          'isBanned',
+          'threadRestrictedUntil',
+          'commentRestrictedUntil',
+          'threadCooldownUntil',
+          'commentCooldownUntil',
+          'reason',
+          'updatedAt',
+          'updatedByUid'
+        ])
+        && (!('role' in request.resource.data)
+          || (request.resource.data.role is string
+            && validForumRoleValue(request.resource.data.role)))
+        && (!('trustedCreator' in request.resource.data)
+          || request.resource.data.trustedCreator is bool)
+        && (!('reputation' in request.resource.data)
+          || (request.resource.data.reputation is number
+            && request.resource.data.reputation >= 0
+            && request.resource.data.reputation <= 1000000))
+        && (!('isBanned' in request.resource.data)
+          || request.resource.data.isBanned is bool)
+        && (!('threadRestrictedUntil' in request.resource.data)
+          || request.resource.data.threadRestrictedUntil is timestamp)
+        && (!('commentRestrictedUntil' in request.resource.data)
+          || request.resource.data.commentRestrictedUntil is timestamp)
+        && (!('threadCooldownUntil' in request.resource.data)
+          || request.resource.data.threadCooldownUntil is timestamp)
+        && (!('commentCooldownUntil' in request.resource.data)
+          || request.resource.data.commentCooldownUntil is timestamp)
+        && (!('reason' in request.resource.data)
+          || isOptionalStringMax(request.resource.data.reason, 300))
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+    }
+
+    function validForumRoleModerationCreatePayload() {
+      return request.resource.data.keys().hasOnly([
+          'isBanned',
+          'threadRestrictedUntil',
+          'commentRestrictedUntil',
+          'threadCooldownUntil',
+          'commentCooldownUntil',
+          'reason',
+          'updatedAt',
+          'updatedByUid'
+        ])
+        && (!('isBanned' in request.resource.data)
+          || request.resource.data.isBanned is bool)
+        && (!('threadRestrictedUntil' in request.resource.data)
+          || request.resource.data.threadRestrictedUntil is timestamp)
+        && (!('commentRestrictedUntil' in request.resource.data)
+          || request.resource.data.commentRestrictedUntil is timestamp)
+        && (!('threadCooldownUntil' in request.resource.data)
+          || request.resource.data.threadCooldownUntil is timestamp)
+        && (!('commentCooldownUntil' in request.resource.data)
+          || request.resource.data.commentCooldownUntil is timestamp)
+        && (!('reason' in request.resource.data)
+          || isOptionalStringMax(request.resource.data.reason, 300))
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+    }
+
+    function validForumRoleModerationUpdatePayload() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'isBanned',
+          'threadRestrictedUntil',
+          'commentRestrictedUntil',
+          'threadCooldownUntil',
+          'commentCooldownUntil',
+          'reason',
+          'updatedAt',
+          'updatedByUid'
+        ])
+        && (!('isBanned' in request.resource.data)
+          || request.resource.data.isBanned is bool)
+        && (!('threadRestrictedUntil' in request.resource.data)
+          || request.resource.data.threadRestrictedUntil is timestamp)
+        && (!('commentRestrictedUntil' in request.resource.data)
+          || request.resource.data.commentRestrictedUntil is timestamp)
+        && (!('threadCooldownUntil' in request.resource.data)
+          || request.resource.data.threadCooldownUntil is timestamp)
+        && (!('commentCooldownUntil' in request.resource.data)
+          || request.resource.data.commentCooldownUntil is timestamp)
+        && (!('reason' in request.resource.data)
+          || isOptionalStringMax(request.resource.data.reason, 300))
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+    }
+
+    function validModerationActionPayload() {
+      return request.resource.data.keys().hasOnly([
+          'actionType',
+          'targetUid',
+          'threadId',
+          'commentId',
+          'reason',
+          'details',
+          'createdAt',
+          'createdByUid'
+        ])
+        && request.resource.data.keys().hasAll([
+          'actionType',
+          'targetUid',
+          'createdAt',
+          'createdByUid'
+        ])
+        && isNonEmptyStringMax(request.resource.data.actionType, 60)
+        && isNonEmptyStringMax(request.resource.data.targetUid, 128)
+        && (!('threadId' in request.resource.data)
+          || isNonEmptyString(request.resource.data.threadId))
+        && (!('commentId' in request.resource.data)
+          || isNonEmptyString(request.resource.data.commentId))
+        && (!('reason' in request.resource.data)
+          || isOptionalStringMax(request.resource.data.reason, 300))
+        && (!('details' in request.resource.data)
+          || request.resource.data.details is map)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdByUid == request.auth.uid;
+    }
+
+    match /episodeComments/{episodeId}/items/{commentId} {
+      allow read: if true;
+
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'body', 'authorUid', 'authorName', 'authorEmail', 'createdAt'
+        ])
+        && isNonEmptyStringMax(request.resource.data.body, 500)
+        && request.resource.data.authorUid == request.auth.uid
+        && isNonEmptyStringMax(request.resource.data.authorName, 80)
+        && (!('authorEmail' in request.resource.data)
+          || request.resource.data.authorEmail == request.auth.token.email)
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if isAdmin() || (
+        isOwner()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['body'])
+        && isNonEmptyStringMax(request.resource.data.body, 500)
+        && request.resource.data.authorUid == resource.data.authorUid
+        && request.resource.data.authorName == resource.data.authorName
+        && request.resource.data.authorEmail == resource.data.authorEmail
+        && request.resource.data.createdAt == resource.data.createdAt
+      );
+
+      allow delete: if isOwner() || isAdmin();
+    }
+
+    match /forumCategories/{categoryId} {
+      allow read: if true;
+
+      allow create: if isSignedIn()
+        && validForumCategoryPayload()
+        && (
+          (request.resource.data.type == 'admin' && isAdmin())
+          || (request.resource.data.type == 'normal' && canCreateNormalCategory())
+        );
+
+      allow update, delete: if isAdmin();
+    }
+
+    match /forumThreads/{threadId} {
+      allow read: if canReadModeratedDoc(resource.data);
+
+      allow create: if isSignedIn()
+        && canCreateThreadByUser(request.auth.uid)
+        && validForumThreadCreatePayload()
+        && (
+          request.resource.data.categoryType == 'normal'
+          || isAdmin()
+        );
+
+      allow update: if (
+          isSelf(resource.data.authorUid)
+          && validForumThreadUpdateByOwner()
+        ) || (
+          isAdmin() && validForumThreadUpdateByAdmin()
+        ) || (
+          isModerator() && validForumThreadUpdateByModerator()
+        ) || (
+          isSignedIn() && validForumThreadCounterSyncUpdate()
+        );
+
+      allow delete: if isModerator() || isSelf(resource.data.authorUid);
+
+      match /comments/{commentId} {
+        allow read: if threadExists(threadId)
+          && canReadModeratedDoc(threadDoc(threadId).data)
+          && (
+            !('moderationStatus' in resource.data)
+            || resource.data.moderationStatus == 'visible'
+            || isModerator()
+            || isSelf(resource.data.authorUid)
+            || isSelf(threadDoc(threadId).data.authorUid)
+          );
+
+        allow create: if isSignedIn()
+          && canCreateCommentByUser(request.auth.uid)
+          && threadCanReceiveComments(threadId)
+          && validForumCommentPayload();
+
+        allow update: if (
+            isSelf(resource.data.authorUid)
+            && validForumCommentUpdateByOwner()
+          ) || (
+            isModerator() && validForumCommentUpdateByModerator()
+          );
+
+        allow delete: if isModerator() || isSelf(resource.data.authorUid);
+      }
+    }
+
+    match /forumUserRoles/{uid} {
+      allow read: if hasAdminClaim() || isSelf(uid);
+      allow create: if (
+          isAdmin() && validForumRolePayload()
+        ) || (
+          isModerator() && validForumRoleModerationCreatePayload()
+        );
+      allow update: if (
+          isAdmin() && validForumRolePayload()
+        ) || (
+          isModerator() && validForumRoleModerationUpdatePayload()
+        );
+      allow delete: if hasAdminClaim();
+    }
+
+    match /forumModerationActions/{actionId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && validModerationActionPayload();
+      allow update, delete: if false;
+    }
+
+    match /forumRateLimits/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+  }
+}
