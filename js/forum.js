@@ -3,6 +3,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/fi
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -11,6 +12,7 @@ import {
   query,
   serverTimestamp,
   startAfter,
+  updateDoc,
   where,
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
@@ -63,8 +65,15 @@ const state = {
   feedRequestId: 0,
   authUser: null,
   authClaims: {},
+  currentUserRoleData: null,
   forumRole: "member",
   isAdmin: false,
+  threadPostingRestriction: null,
+  adminModerationStatus: "pending",
+  adminModerationThreads: [],
+  isLoadingAdminModeration: false,
+  hasLoadedAdminModeration: false,
+  adminModerationRequestId: 0,
   isSubmittingThread: false,
   isModalOpen: false,
   modalCloseTimeoutId: 0,
@@ -110,6 +119,7 @@ const refs = {
   threadFeedback: document.getElementById("thread-form-feedback"),
 
   adminTools: document.getElementById("forum-admin-tools"),
+  adminModerationPanel: document.getElementById("forum-admin-moderation-panel"),
   adminCategoryForm: document.getElementById("admin-category-form"),
   adminCategoryName: document.getElementById("admin-category-name"),
   adminCategorySlug: document.getElementById("admin-category-slug"),
@@ -118,6 +128,11 @@ const refs = {
     "admin-category-description",
   ),
   adminCategorySubmit: document.getElementById("admin-category-submit"),
+  adminThreadFilterChips: document.getElementById("admin-thread-filter-chips"),
+  adminThreadsLoading: document.getElementById("admin-threads-loading"),
+  adminThreadsEmpty: document.getElementById("admin-threads-empty"),
+  adminThreadsList: document.getElementById("admin-threads-list"),
+  adminThreadsFeedback: document.getElementById("admin-threads-feedback"),
 };
 let feedObserver = null;
 
@@ -208,6 +223,78 @@ const formatRelativeTime = (rawDate) => {
     month: "short",
     year: "numeric",
   }).format(date);
+};
+
+const formatAbsoluteDateTime = (rawDate) => {
+  const date = toDateOrNull(rawDate);
+  if (!date) return "dată necunoscută";
+
+  return new Intl.DateTimeFormat("ro-RO", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+};
+
+const getActivePostingRestriction = (roleData, scope) => {
+  if (!roleData || typeof roleData !== "object") return null;
+
+  const reason = toTrimmedString(roleData.reason);
+  if (roleData.isBanned === true) {
+    return {
+      kind: "banned",
+      reason,
+      until: null,
+    };
+  }
+
+  const restrictionField =
+    scope === "threads" ? "threadRestrictedUntil" : "commentRestrictedUntil";
+  const cooldownField =
+    scope === "threads" ? "threadCooldownUntil" : "commentCooldownUntil";
+
+  const restrictedUntil = toDateOrNull(roleData[restrictionField]);
+  if (restrictedUntil && restrictedUntil.getTime() > Date.now()) {
+    return {
+      kind: "restricted",
+      reason,
+      until: restrictedUntil,
+    };
+  }
+
+  const cooldownUntil = toDateOrNull(roleData[cooldownField]);
+  if (cooldownUntil && cooldownUntil.getTime() > Date.now()) {
+    return {
+      kind: "cooldown",
+      reason,
+      until: cooldownUntil,
+    };
+  }
+
+  return null;
+};
+
+const describePostingRestriction = (restriction, scopeLabel = "conținut") => {
+  if (!restriction) return "";
+
+  if (restriction.kind === "banned") {
+    return restriction.reason ?
+        `Nu poți publica ${scopeLabel}. Motiv: ${restriction.reason}.`
+      : `Nu poți publica ${scopeLabel} momentan.`;
+  }
+
+  const untilText =
+    restriction.until ? formatAbsoluteDateTime(restriction.until) : "";
+  const prefix =
+    restriction.kind === "cooldown" ?
+      `Ai un cooldown activ pentru ${scopeLabel}`
+    : `Ai o restricție activă pentru ${scopeLabel}`;
+  const reasonText = restriction.reason ? ` Motiv: ${restriction.reason}.` : "";
+  return untilText ?
+      `${prefix} până la ${untilText}.${reasonText}`
+    : `${prefix}.${reasonText}`;
 };
 
 const describeError = (
@@ -325,6 +412,68 @@ const renderFeedStatus = (text) => {
 const clearNode = (node) => {
   if (!node) return;
   while (node.firstChild) node.removeChild(node.firstChild);
+};
+
+const ICON_SVG_MARKUP = {
+  externalLink:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link-icon lucide-external-link"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
+  eye: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye-icon lucide-eye"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>',
+  eyeOff:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye-off-icon lucide-eye-off"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>',
+  edit: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil-icon lucide-pencil"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>',
+  ban: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-ban-icon lucide-ban"><circle cx="12" cy="12" r="10"/><path d="M4.929 4.929 19.07 19.071"/></svg>',
+  trash:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2-icon lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+};
+
+const createActionIcon = (iconName) => {
+  const template = document.createElement("template");
+  template.innerHTML = (
+    ICON_SVG_MARKUP[iconName] || ICON_SVG_MARKUP.externalLink
+  ).trim();
+  const node = template.content.firstElementChild;
+  if (!(node instanceof SVGElement)) return null;
+  node.classList.add("forum-icon-action-svg");
+  node.setAttribute("aria-hidden", "true");
+  return node;
+};
+
+const buildIconAction = ({
+  label,
+  icon,
+  action = "",
+  danger = false,
+  tag = "button",
+  href = "",
+} = {}) => {
+  const node =
+    tag === "a" ?
+      document.createElement("a")
+    : document.createElement("button");
+
+  node.className = `forum-icon-action${danger ? " forum-icon-action-danger" : ""}`;
+  node.setAttribute("aria-label", label || "Acțiune");
+  node.setAttribute("title", label || "Acțiune");
+
+  if (node instanceof HTMLAnchorElement) {
+    node.href = href || "#";
+  } else {
+    node.type = "button";
+  }
+
+  if (action) node.dataset.adminThreadAction = action;
+
+  const iconNode = createActionIcon(icon);
+  if (iconNode) {
+    node.appendChild(iconNode);
+  }
+
+  const labelWrap = document.createElement("span");
+  labelWrap.className = "forum-icon-action-label";
+  labelWrap.textContent = label || "";
+
+  node.appendChild(labelWrap);
+  return node;
 };
 
 const showFeedLoading = (isVisible) => {
@@ -1118,10 +1267,24 @@ const setComposerCategoryScope = (scope, { preferredValue = null } = {}) => {
 };
 
 const updateCreateUiState = () => {
+  const restrictionMessage = describePostingRestriction(
+    state.threadPostingRestriction,
+    "thread-uri",
+  );
+  const isRestricted = Boolean(state.threadPostingRestriction);
+
+  if (refs.newThreadBtn) {
+    refs.newThreadBtn.disabled = isRestricted;
+    refs.newThreadBtn.classList.toggle("is-disabled", isRestricted);
+  }
+
   if (state.authUser) {
-    refs.newThreadBtn.textContent = "Start o nouă discuție";
+    refs.newThreadBtn.textContent =
+      isRestricted ? "Publicare restricționată" : "Start o nouă discuție";
     if (refs.createHelp) {
-      if (state.isAdmin) {
+      if (isRestricted) {
+        refs.createHelp.textContent = restrictionMessage;
+      } else if (state.isAdmin) {
         refs.createHelp.textContent =
           "Ai acces admin: poți fixa thread-uri direct din formular.";
       } else {
@@ -1131,6 +1294,8 @@ const updateCreateUiState = () => {
     }
   } else {
     refs.newThreadBtn.textContent = "Intră pentru a publica";
+    refs.newThreadBtn.disabled = true;
+    refs.newThreadBtn.classList.add("is-disabled");
     if (refs.createHelp) {
       refs.createHelp.textContent =
         "Autentifică-te pentru a porni un subiect nou în forum.";
@@ -1146,9 +1311,272 @@ const setFormFeedback = (text, type = "") => {
   if (type === "success") refs.threadFeedback.classList.add("is-success");
 };
 
+const setAdminThreadsFeedback = (text, type = "") => {
+  if (!refs.adminThreadsFeedback) return;
+
+  refs.adminThreadsFeedback.textContent = text;
+  refs.adminThreadsFeedback.classList.remove("is-error", "is-success");
+
+  if (type === "error") refs.adminThreadsFeedback.classList.add("is-error");
+  if (type === "success") refs.adminThreadsFeedback.classList.add("is-success");
+};
+
+const renderAdminThreadFilterChips = () => {
+  if (!refs.adminThreadFilterChips) return;
+
+  const chips = refs.adminThreadFilterChips.querySelectorAll(
+    "[data-admin-thread-status]",
+  );
+
+  chips.forEach((chip) => {
+    const status = toTrimmedString(
+      chip.getAttribute("data-admin-thread-status"),
+    );
+    const isActive = status === state.adminModerationStatus;
+    chip.classList.toggle("is-active", isActive);
+    chip.setAttribute("aria-selected", String(isActive));
+  });
+};
+
+const renderAdminModerationThreads = () => {
+  if (
+    !refs.adminThreadsLoading ||
+    !refs.adminThreadsEmpty ||
+    !refs.adminThreadsList ||
+    !refs.adminThreadFilterChips
+  ) {
+    return;
+  }
+
+  if (!state.isAdmin) {
+    refs.adminThreadFilterChips.hidden = true;
+    refs.adminThreadsLoading.hidden = true;
+    refs.adminThreadsEmpty.hidden = true;
+    clearNode(refs.adminThreadsList);
+    setAdminThreadsFeedback("");
+    return;
+  }
+
+  refs.adminThreadFilterChips.hidden = false;
+  renderAdminThreadFilterChips();
+
+  refs.adminThreadsLoading.hidden = !state.isLoadingAdminModeration;
+
+  const isEmpty =
+    state.hasLoadedAdminModeration &&
+    !state.isLoadingAdminModeration &&
+    state.adminModerationThreads.length === 0;
+  refs.adminThreadsEmpty.hidden = !isEmpty;
+
+  clearNode(refs.adminThreadsList);
+
+  const fragment = document.createDocumentFragment();
+  state.adminModerationThreads.forEach((thread) => {
+    const article = document.createElement("article");
+    article.className = "forum-admin-thread-card";
+    article.setAttribute("role", "listitem");
+
+    const head = document.createElement("div");
+    head.className = "forum-admin-thread-head";
+
+    const title = document.createElement("h4");
+    title.className = "forum-admin-thread-title";
+    title.textContent = thread.title;
+    head.appendChild(title);
+
+    const meta = document.createElement("div");
+    meta.className = "forum-admin-thread-meta";
+
+    const statusPill = document.createElement("span");
+    statusPill.className = "forum-pill";
+    statusPill.textContent = `status: ${thread.moderationStatus}`;
+    meta.appendChild(statusPill);
+
+    const categoryPill = document.createElement("span");
+    categoryPill.className = "forum-pill";
+    categoryPill.textContent = getThreadCategoryLabel(thread);
+    meta.appendChild(categoryPill);
+
+    const author = document.createElement("span");
+    author.textContent = `de ${thread.authorName}`;
+    meta.appendChild(author);
+
+    const activity = document.createElement("span");
+    activity.textContent = `actualizat ${formatRelativeTime(
+      thread.lastActivityAt || thread.createdAt,
+    )}`;
+    meta.appendChild(activity);
+
+    const actions = document.createElement("div");
+    actions.className = "forum-admin-thread-actions";
+
+    const openLink = buildIconAction({
+      tag: "a",
+      label: "Deschide",
+      icon: "externalLink",
+      href: buildThreadUrl(thread),
+    });
+    actions.appendChild(openLink);
+
+    if (thread.moderationStatus !== "visible") {
+      const showBtn = buildIconAction({
+        label: "Fă vizibil",
+        icon: "eye",
+        action: "visible",
+      });
+      showBtn.dataset.threadId = thread.id;
+      actions.appendChild(showBtn);
+    }
+
+    if (thread.moderationStatus !== "hidden") {
+      const hideBtn = buildIconAction({
+        label: "Ascunde",
+        icon: "eyeOff",
+        action: "hidden",
+      });
+      hideBtn.dataset.threadId = thread.id;
+      actions.appendChild(hideBtn);
+    }
+
+    const deleteBtn = buildIconAction({
+      label: "Șterge",
+      icon: "trash",
+      action: "delete",
+      danger: true,
+    });
+    deleteBtn.dataset.threadId = thread.id;
+    actions.appendChild(deleteBtn);
+
+    article.append(head, meta, actions);
+    fragment.appendChild(article);
+  });
+
+  refs.adminThreadsList.appendChild(fragment);
+};
+
+const loadAdminModerationThreads = async () => {
+  if (!state.isAdmin) return;
+
+  const status = state.adminModerationStatus;
+  const requestId = ++state.adminModerationRequestId;
+  state.isLoadingAdminModeration = true;
+  renderAdminModerationThreads();
+  setAdminThreadsFeedback("");
+
+  const threadsRef = collection(db, THREADS_COLLECTION);
+
+  try {
+    const snapshot = await getDocs(
+      query(
+        threadsRef,
+        where("moderationStatus", "==", status),
+        orderBy("updatedAt", "desc"),
+        limit(30),
+      ),
+    );
+
+    if (requestId !== state.adminModerationRequestId) return;
+    state.adminModerationThreads = snapshot.docs.map(mapThreadDoc);
+  } catch (error) {
+    if (requestId !== state.adminModerationRequestId) return;
+
+    try {
+      const fallbackSnapshot = await getDocs(
+        query(threadsRef, where("moderationStatus", "==", status), limit(60)),
+      );
+
+      if (requestId !== state.adminModerationRequestId) return;
+      state.adminModerationThreads = fallbackSnapshot.docs
+        .map(mapThreadDoc)
+        .sort((a, b) => {
+          const aTime =
+            a.updatedAt?.getTime?.() ||
+            0 ||
+            a.lastActivityAt?.getTime?.() ||
+            0 ||
+            a.createdAt?.getTime?.() ||
+            0;
+          const bTime =
+            b.updatedAt?.getTime?.() ||
+            0 ||
+            b.lastActivityAt?.getTime?.() ||
+            0 ||
+            b.createdAt?.getTime?.() ||
+            0;
+          return bTime - aTime;
+        })
+        .slice(0, 30);
+    } catch {
+      state.adminModerationThreads = [];
+      setAdminThreadsFeedback(
+        describeError(error, "Nu am putut încărca thread-urile moderate."),
+        "error",
+      );
+    }
+  } finally {
+    if (requestId === state.adminModerationRequestId) {
+      state.isLoadingAdminModeration = false;
+      state.hasLoadedAdminModeration = true;
+      renderAdminModerationThreads();
+    }
+  }
+};
+
+const updateAdminThreadModerationStatus = async (threadId, status) => {
+  if (!state.isAdmin || !threadId) return;
+  if (!["visible", "hidden", "pending"].includes(status)) return;
+
+  try {
+    await updateDoc(doc(db, THREADS_COLLECTION, threadId), {
+      moderationStatus: status,
+      updatedAt: serverTimestamp(),
+      lastActivityAt: serverTimestamp(),
+    });
+
+    setAdminThreadsFeedback("Thread actualizat.", "success");
+    await Promise.all([
+      loadAdminModerationThreads(),
+      loadStickyThreads(),
+      loadFeedPage({ reset: true }),
+    ]);
+  } catch (error) {
+    setAdminThreadsFeedback(
+      describeError(error, "Nu am putut actualiza statusul thread-ului."),
+      "error",
+    );
+  }
+};
+
+const deleteAdminModeratedThread = async (threadId) => {
+  if (!state.isAdmin || !threadId) return;
+
+  const shouldDelete = window.confirm(
+    "Confirmi ștergerea definitivă a acestui thread?",
+  );
+  if (!shouldDelete) return;
+
+  try {
+    await deleteDoc(doc(db, THREADS_COLLECTION, threadId));
+    setAdminThreadsFeedback("Thread șters.", "success");
+    await Promise.all([
+      loadAdminModerationThreads(),
+      loadStickyThreads(),
+      loadFeedPage({ reset: true }),
+    ]);
+  } catch (error) {
+    setAdminThreadsFeedback(
+      describeError(error, "Nu am putut șterge thread-ul."),
+      "error",
+    );
+  }
+};
+
 const updateAdminToolsVisibility = () => {
   if (refs.adminTools) {
     refs.adminTools.hidden = !state.isAdmin;
+  }
+  if (refs.adminModerationPanel) {
+    refs.adminModerationPanel.hidden = !state.isAdmin;
   }
 
   if (!state.isAdmin) {
@@ -1159,6 +1587,7 @@ const updateAdminToolsVisibility = () => {
   }
 
   updateThreadStickyModeState();
+  renderAdminModerationThreads();
 };
 
 const getFocusableInModal = () => {
@@ -1236,6 +1665,13 @@ const openThreadModal = () => {
     return;
   }
 
+  if (state.threadPostingRestriction) {
+    renderFeedStatus(
+      describePostingRestriction(state.threadPostingRestriction, "thread-uri"),
+    );
+    return;
+  }
+
   setFormFeedback("");
   if (state.isAdmin) {
     state.composerCategoryScope = "all";
@@ -1268,6 +1704,16 @@ const validateThreadInput = () => {
     return {
       ok: false,
       message: "Trebuie să fii autentificat pentru a publica.",
+    };
+  }
+
+  if (state.threadPostingRestriction) {
+    return {
+      ok: false,
+      message: describePostingRestriction(
+        state.threadPostingRestriction,
+        "thread-uri",
+      ),
     };
   }
 
@@ -1381,6 +1827,35 @@ const submitThread = async () => {
     await loadStickyThreads();
     await loadFeedPage({ reset: true });
   } catch (error) {
+    if (error?.code === "permission-denied") {
+      if (state.threadPostingRestriction) {
+        setFormFeedback(
+          describePostingRestriction(
+            state.threadPostingRestriction,
+            "thread-uri",
+          ),
+          "error",
+        );
+        return;
+      }
+
+      const freshRoleData = await loadCurrentUserRoleData(state.authUser);
+      const freshRestriction = getActivePostingRestriction(
+        freshRoleData,
+        "threads",
+      );
+      if (freshRestriction) {
+        state.currentUserRoleData = freshRoleData;
+        state.threadPostingRestriction = freshRestriction;
+        updateCreateUiState();
+        setFormFeedback(
+          describePostingRestriction(freshRestriction, "thread-uri"),
+          "error",
+        );
+        return;
+      }
+    }
+
     setFormFeedback(
       describeError(error, "Nu am putut publica subiectul. Încearcă din nou."),
       "error",
@@ -1564,6 +2039,59 @@ const onStickyCategoryChipClick = (event) => {
   renderStickySection();
 };
 
+const onAdminModerationPanelToggle = async () => {
+  if (!state.isAdmin || !refs.adminModerationPanel) return;
+  if (!refs.adminModerationPanel.open) return;
+  if (state.isLoadingAdminModeration || state.hasLoadedAdminModeration) return;
+  await loadAdminModerationThreads();
+};
+
+const onAdminThreadFilterClick = async (event) => {
+  const target = event.target.closest("[data-admin-thread-status]");
+  if (!target || !state.isAdmin) return;
+
+  const status = toTrimmedString(
+    target.getAttribute("data-admin-thread-status"),
+  );
+  if (!["pending", "hidden"].includes(status)) return;
+  if (
+    status === state.adminModerationStatus &&
+    state.hasLoadedAdminModeration
+  ) {
+    return;
+  }
+
+  state.adminModerationStatus = status;
+  renderAdminThreadFilterChips();
+  if (!refs.adminModerationPanel?.open) return;
+  await loadAdminModerationThreads();
+};
+
+const onAdminThreadsListClick = async (event) => {
+  const target = event.target.closest("[data-admin-thread-action]");
+  if (!target || !state.isAdmin) return;
+
+  const action = toTrimmedString(
+    target.getAttribute("data-admin-thread-action"),
+  );
+  const threadId = toTrimmedString(target.getAttribute("data-thread-id"));
+  if (!threadId) return;
+
+  if (action === "visible") {
+    await updateAdminThreadModerationStatus(threadId, "visible");
+    return;
+  }
+
+  if (action === "hidden") {
+    await updateAdminThreadModerationStatus(threadId, "hidden");
+    return;
+  }
+
+  if (action === "delete") {
+    await deleteAdminModeratedThread(threadId);
+  }
+};
+
 const onThreadCategoryChange = () => {
   if (!state.isAdmin) return;
 
@@ -1616,6 +2144,48 @@ const onThreadStickyToggle = () => {
   });
 };
 
+const openNativeSelectPicker = (selectElement) => {
+  if (!(selectElement instanceof HTMLSelectElement)) return;
+  if (selectElement.disabled) return;
+
+  selectElement.focus({ preventScroll: true });
+
+  if (typeof selectElement.showPicker === "function") {
+    try {
+      selectElement.showPicker();
+      return;
+    } catch {
+      // Browser may block showPicker without a trusted click.
+    }
+  }
+
+  selectElement.click();
+};
+
+const bindSelectShell = (shellElement, selectElement) => {
+  if (!(shellElement instanceof HTMLElement)) return;
+  if (!(selectElement instanceof HTMLSelectElement)) return;
+  if (shellElement.dataset.selectShellBound === "true") return;
+
+  shellElement.dataset.selectShellBound = "true";
+
+  if (!shellElement.hasAttribute("tabindex")) {
+    shellElement.tabIndex = 0;
+  }
+
+  shellElement.addEventListener("click", (event) => {
+    if (event.target instanceof HTMLSelectElement) return;
+    event.preventDefault();
+    openNativeSelectPicker(selectElement);
+  });
+
+  shellElement.addEventListener("keydown", (event) => {
+    if (!["Enter", " ", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    openNativeSelectPicker(selectElement);
+  });
+};
+
 const onSortChange = async () => {
   const nextSort = refs.sortSelect.value;
   if (!SORT_CONFIG[nextSort]) return;
@@ -1625,12 +2195,32 @@ const onSortChange = async () => {
   await loadFeedPage({ reset: true });
 };
 
-const resolveCurrentUserForumRole = async (user, claims = {}) => {
+const loadCurrentUserRoleData = async (user) => {
+  if (!user) return null;
+
+  try {
+    const roleSnapshot = await getDoc(doc(db, USER_ROLES_COLLECTION, user.uid));
+    if (!roleSnapshot.exists()) return null;
+    return roleSnapshot.data() || null;
+  } catch {
+    return null;
+  }
+};
+
+const resolveCurrentUserForumRole = async (
+  user,
+  claims = {},
+  roleData = null,
+) => {
   if (!user) return "member";
 
   if (claims.admin === true || claims.role === "admin") return "admin";
   if (claims.moderator === true || claims.role === "moderator")
     return "moderator";
+
+  if (roleData) {
+    return normalizeForumRole(roleData.role);
+  }
 
   try {
     const roleSnapshot = await getDoc(doc(db, USER_ROLES_COLLECTION, user.uid));
@@ -1649,24 +2239,37 @@ const initAuth = () => {
   onAuthStateChanged(auth, async (user) => {
     state.authUser = user;
     state.authClaims = {};
+    state.currentUserRoleData = null;
     state.forumRole = "member";
     state.isAdmin = false;
+    state.threadPostingRestriction = null;
 
     if (user) {
+      state.currentUserRoleData = await loadCurrentUserRoleData(user);
       try {
         const tokenResult = await user.getIdTokenResult(true);
         state.authClaims = tokenResult?.claims || {};
         state.forumRole = await resolveCurrentUserForumRole(
           user,
           state.authClaims,
+          state.currentUserRoleData,
         );
         state.isAdmin = state.forumRole === "admin";
       } catch {
         state.authClaims = {};
-        state.forumRole = await resolveCurrentUserForumRole(user, {});
+        state.forumRole = await resolveCurrentUserForumRole(
+          user,
+          {},
+          state.currentUserRoleData,
+        );
         state.isAdmin = state.forumRole === "admin";
       }
     }
+
+    state.threadPostingRestriction = getActivePostingRestriction(
+      state.currentUserRoleData,
+      "threads",
+    );
 
     state.composerCategoryScope = state.isAdmin ? "all" : "normal";
     setComposerCategoryScope(state.composerCategoryScope, {
@@ -1675,6 +2278,20 @@ const initAuth = () => {
     renderStickyCategoryChips();
     updateCreateUiState();
     updateAdminToolsVisibility();
+
+    if (!state.isAdmin) {
+      state.adminModerationThreads = [];
+      state.isLoadingAdminModeration = false;
+      state.hasLoadedAdminModeration = false;
+      state.adminModerationRequestId++;
+      renderAdminModerationThreads();
+      setAdminThreadsFeedback("");
+      return;
+    }
+
+    if (refs.adminModerationPanel?.open && !state.hasLoadedAdminModeration) {
+      await loadAdminModerationThreads();
+    }
   });
 };
 
@@ -1687,12 +2304,25 @@ const bindEvents = () => {
   });
 
   refs.sortSelect.addEventListener("change", onSortChange);
+  bindSelectShell(
+    refs.sortSelect?.closest(".forum-select-shell"),
+    refs.sortSelect,
+  );
   refs.searchInput?.addEventListener("input", onSearchInput);
   refs.categoryChips.addEventListener("click", onCategoryChipClick);
   refs.stickyCategoryChips?.addEventListener(
     "click",
     onStickyCategoryChipClick,
   );
+  refs.adminThreadFilterChips?.addEventListener("click", async (event) => {
+    await onAdminThreadFilterClick(event);
+  });
+  refs.adminModerationPanel?.addEventListener("toggle", async () => {
+    await onAdminModerationPanelToggle();
+  });
+  refs.adminThreadsList?.addEventListener("click", async (event) => {
+    await onAdminThreadsListClick(event);
+  });
   refs.threadCategory.addEventListener("change", onThreadCategoryChange);
   refs.threadIsSticky?.addEventListener("change", onThreadStickyToggle);
 
@@ -1746,6 +2376,7 @@ const init = async () => {
     preferredValue: refs.threadCategory.value,
   });
   updateCreateUiState();
+  renderAdminModerationThreads();
 
   await Promise.all([loadStickyThreads(), loadFeedPage({ reset: true })]);
 };

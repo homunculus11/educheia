@@ -194,7 +194,6 @@
     <main class="forum-main">
       <div class="forum-top-grid" aria-hidden="true"></div>
       <section class="forum-hero" aria-labelledby="forum-title">
-        <div class="forum-grid-overlay" aria-hidden="true"></div>
         <div class="forum-shell">
           <div class="forum-hero-inner">
             <div class="forum-hero-copy">
@@ -222,6 +221,12 @@
               >
                 Start o nouă discuție
               </button>
+              <p
+                id="forum-create-help"
+                class="forum-create-help"
+                role="status"
+                aria-live="polite"
+              ></p>
             </div>
           </div>
         </div>
@@ -233,6 +238,97 @@
       >
         <div class="forum-content-grid">
           <div class="forum-primary">
+            <details
+              id="forum-admin-moderation-panel"
+              class="forum-admin-moderation-panel"
+              hidden
+            >
+              <summary class="forum-admin-moderation-toggle">
+                <span class="forum-admin-moderation-toggle-copy">
+                  <span id="forum-admin-moderation-title"
+                    >Moderare Pending / Hidden</span
+                  >
+                  <span class="forum-admin-moderation-toggle-subtitle"
+                    >Listă separată pentru thread-urile nepublice</span
+                  >
+                </span>
+                <span
+                  class="forum-admin-moderation-toggle-icon"
+                  aria-hidden="true"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M6 9l6 6 6-6"
+                    ></path>
+                  </svg>
+                </span>
+              </summary>
+
+              <div class="forum-admin-moderation-body">
+                <div
+                  class="forum-chip-row forum-admin-thread-filter"
+                  id="admin-thread-filter-chips"
+                  role="tablist"
+                  aria-label="Filtru moderare admin"
+                >
+                  <button
+                    type="button"
+                    class="forum-chip is-active"
+                    data-admin-thread-status="pending"
+                    role="tab"
+                    aria-selected="true"
+                  >
+                    Pending
+                  </button>
+                  <button
+                    type="button"
+                    class="forum-chip"
+                    data-admin-thread-status="hidden"
+                    role="tab"
+                    aria-selected="false"
+                  >
+                    Hidden
+                  </button>
+                </div>
+
+                <div
+                  id="admin-threads-loading"
+                  class="forum-skeleton-list"
+                  aria-hidden="true"
+                  hidden
+                >
+                  <article class="forum-thread-skeleton"></article>
+                  <article class="forum-thread-skeleton"></article>
+                </div>
+
+                <div id="admin-threads-empty" class="forum-empty" hidden>
+                  <h3>Nu există subiecte în acest status</h3>
+                  <p>Schimbă filtrul sau revino mai târziu.</p>
+                </div>
+
+                <div
+                  id="admin-threads-list"
+                  class="forum-thread-list forum-admin-thread-list"
+                  role="list"
+                  aria-live="polite"
+                ></div>
+
+                <p
+                  id="admin-threads-feedback"
+                  class="forum-form-feedback"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+              </div>
+            </details>
+
             <section class="forum-block" aria-labelledby="forum-official-title">
               <div class="forum-block-head">
                 <h2 id="forum-official-title">Anunțuri și Resurse Oficiale</h2>
@@ -318,7 +414,10 @@
                   />
                 </label>
 
-                <label class="forum-sort" for="forum-sort-select">
+                <label
+                  class="forum-sort forum-select-shell"
+                  for="forum-sort-select"
+                >
                   <span>Sortare</span>
                   <select id="forum-sort-select">
                     <option value="activity">Activitate recentă</option>
@@ -708,7 +807,7 @@
             &copy; 2026 Educheia. Toate drepturile rezervate.
           </p>
           <p class="footer-credit">
-            Făcut de Orlețchi Bogdan și Macari Nicolae
+            Realizat de Orlețchi Bogdan și Macari Nicolae
           </p>
         </div>
       </div>

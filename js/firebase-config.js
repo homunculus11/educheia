@@ -13,7 +13,7 @@ const firebaseConfig = {
   storageBucket: "educheia.firebasestorage.app",
   messagingSenderId: "740416284743",
   appId: "1:740416284743:web:b2022a18e9a26ee66b2962",
-  measurementId: "G-2J5GMZQ0G6"
+  measurementId: "G-2J5GMZQ0G6",
 };
 
 // Initialize Firebase

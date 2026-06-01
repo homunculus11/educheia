@@ -3,6 +3,7 @@ import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/fi
 import {
   addDoc,
   collection,
+  deleteField,
   deleteDoc,
   doc,
   getDoc,
@@ -12,6 +13,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   startAfter,
   updateDoc,
   where,
@@ -38,19 +40,26 @@ const state = {
   categoriesById: new Map(),
   authUser: null,
   authClaims: {},
+  currentUserRoleData: null,
   forumRole: "member",
   isAdmin: false,
   isModerator: false,
+  commentPostingRestriction: null,
+  moderationTargets: new Map(),
   replies: [],
+  repliesSort: "newest",
   repliesCursor: null,
   hasMoreReplies: true,
   repliesUsingIndexFallback: false,
   isLoadingReplies: false,
   repliesRequestId: 0,
   isSubmittingReply: false,
+  isSavingOwnerEdit: false,
   isSavingModeration: false,
+  isSavingBan: false,
   editingReplyId: "",
   editingReplyValue: "",
+  replyComposerExpanded: false,
   authSignature: "guest",
 };
 
@@ -64,6 +73,7 @@ const refs = {
 
   threadContent: document.getElementById("thread-content"),
   threadTitle: document.getElementById("thread-title"),
+  threadSummaryTitle: document.getElementById("thread-summary-title"),
   threadBody: document.getElementById("thread-body"),
   threadAuthorAvatar: document.getElementById("thread-author-avatar"),
   threadAuthorName: document.getElementById("thread-author-name"),
@@ -72,11 +82,13 @@ const refs = {
   threadRepliesCount: document.getElementById("thread-replies-count"),
   threadSummaryBadges: document.getElementById("thread-summary-badges"),
   threadLastActivity: document.getElementById("thread-last-activity"),
-  replyStartBtn: document.getElementById("reply-start-btn"),
 
+  replyComposeTrigger: document.getElementById("reply-compose-trigger"),
   replyForm: document.getElementById("reply-form"),
+  replyCancelBtn: document.getElementById("reply-cancel-btn"),
   replyAuthNote: document.getElementById("reply-auth-note"),
   replyInput: document.getElementById("reply-input"),
+  replyCharCount: document.getElementById("reply-char-count"),
   replySubmit: document.getElementById("reply-submit"),
   replyFeedback: document.getElementById("reply-feedback"),
 
@@ -85,18 +97,41 @@ const refs = {
   repliesEmpty: document.getElementById("replies-empty"),
   repliesList: document.getElementById("replies-list"),
   repliesLoadMore: document.getElementById("replies-load-more"),
+  repliesSortSelect: document.getElementById("replies-sort-select"),
+  backToTopBtn: document.getElementById("forum-thread-back-to-top"),
 
   moderationPanel: document.getElementById("thread-moderation-panel"),
+  threadToolsDetails: document.getElementById("thread-tools-details"),
+  threadToolsSubtitle: document.getElementById("thread-tools-subtitle"),
+  moderationCopy: document.getElementById("moderation-copy"),
+  ownerSection: document.getElementById("thread-owner-section"),
+  moderationSection: document.getElementById("thread-moderation-section"),
+  restrictionSection: document.getElementById("thread-restriction-section"),
+  ownerForm: document.getElementById("thread-owner-edit-form"),
+  ownerTitle: document.getElementById("owner-thread-title"),
+  ownerBody: document.getElementById("owner-thread-body"),
+  ownerSubmit: document.getElementById("owner-thread-submit"),
+  ownerFeedback: document.getElementById("owner-thread-feedback"),
   moderationForm: document.getElementById("thread-moderation-form"),
-  modTitle: document.getElementById("mod-thread-title"),
   modCategory: document.getElementById("mod-thread-category"),
   modStatus: document.getElementById("mod-thread-status"),
   modLocked: document.getElementById("mod-thread-locked"),
   modSticky: document.getElementById("mod-thread-sticky"),
-  modBody: document.getElementById("mod-thread-body"),
   modSubmit: document.getElementById("mod-thread-submit"),
+  modDelete: document.getElementById("mod-thread-delete"),
   modStickyHint: document.getElementById("mod-sticky-hint"),
   modFeedback: document.getElementById("mod-feedback"),
+  banForm: document.getElementById("thread-ban-form"),
+  banTargetUser: document.getElementById("mod-ban-target-user"),
+  banTargetUid: document.getElementById("mod-ban-target-uid"),
+  banTargetSummary: document.getElementById("mod-ban-target-summary"),
+  banUseThreadAuthor: document.getElementById("mod-ban-use-thread-author"),
+  banScope: document.getElementById("mod-ban-scope"),
+  banDuration: document.getElementById("mod-ban-duration"),
+  banReason: document.getElementById("mod-ban-reason"),
+  banSubmit: document.getElementById("mod-ban-submit"),
+  banClear: document.getElementById("mod-ban-clear"),
+  banFeedback: document.getElementById("mod-ban-feedback"),
 
   sidebarTotalReplies: document.getElementById("sidebar-total-replies"),
   sidebarParticipants: document.getElementById("sidebar-participants"),
@@ -230,12 +265,182 @@ const formatAbsoluteTime = (rawDate) => {
   }).format(date);
 };
 
+const formatCompactUid = (uid) => {
+  const normalized = toTrimmedString(uid);
+  if (!normalized) return "";
+  if (normalized.length <= 18) return normalized;
+  return `${normalized.slice(0, 8)}...${normalized.slice(-4)}`;
+};
+
+const getActivePostingRestriction = (roleData, scope) => {
+  if (!roleData || typeof roleData !== "object") return null;
+
+  const reason = toTrimmedString(roleData.reason);
+  if (roleData.isBanned === true) {
+    return {
+      kind: "banned",
+      reason,
+      until: null,
+    };
+  }
+
+  const restrictionField =
+    scope === "threads" ? "threadRestrictedUntil" : "commentRestrictedUntil";
+  const cooldownField =
+    scope === "threads" ? "threadCooldownUntil" : "commentCooldownUntil";
+
+  const restrictedUntil = toDateOrNull(roleData[restrictionField]);
+  if (restrictedUntil && restrictedUntil.getTime() > Date.now()) {
+    return {
+      kind: "restricted",
+      reason,
+      until: restrictedUntil,
+    };
+  }
+
+  const cooldownUntil = toDateOrNull(roleData[cooldownField]);
+  if (cooldownUntil && cooldownUntil.getTime() > Date.now()) {
+    return {
+      kind: "cooldown",
+      reason,
+      until: cooldownUntil,
+    };
+  }
+
+  return null;
+};
+
+const describePostingRestriction = (restriction, scopeLabel = "conținut") => {
+  if (!restriction) return "";
+
+  if (restriction.kind === "banned") {
+    return restriction.reason ?
+        `Nu poți publica ${scopeLabel}. Motiv: ${restriction.reason}.`
+      : `Nu poți publica ${scopeLabel} momentan.`;
+  }
+
+  const untilText =
+    restriction.until ? formatAbsoluteTime(restriction.until) : "";
+  const prefix =
+    restriction.kind === "cooldown" ?
+      `Ai un cooldown activ pentru ${scopeLabel}`
+    : `Ai o restricție activă pentru ${scopeLabel}`;
+  const reasonText = restriction.reason ? ` Motiv: ${restriction.reason}.` : "";
+  return untilText ?
+      `${prefix} până la ${untilText}.${reasonText}`
+    : `${prefix}.${reasonText}`;
+};
+
+const getBanTargetUid = () => {
+  const fromSelect = toTrimmedString(refs.banTargetUser?.value);
+  if (fromSelect) return fromSelect;
+  return toTrimmedString(refs.banTargetUid?.value);
+};
+
+const autoResizeReplyInput = () => {
+  if (!refs.replyInput) return;
+
+  const minHeight = 120;
+  const maxHeight = 260;
+
+  refs.replyInput.style.height = "auto";
+  const nextHeight = Math.min(
+    maxHeight,
+    Math.max(minHeight, refs.replyInput.scrollHeight),
+  );
+  refs.replyInput.style.height = `${nextHeight}px`;
+  refs.replyInput.style.overflowY =
+    refs.replyInput.scrollHeight > maxHeight ? "auto" : "hidden";
+};
+
+const renderReplyCharacterCounter = () => {
+  if (!refs.replyInput || !refs.replyCharCount) return;
+
+  const currentLength = refs.replyInput.value.length;
+  const maxLength = Number.parseInt(refs.replyInput.maxLength, 10) || 1500;
+  refs.replyCharCount.textContent = `${currentLength}/${maxLength}`;
+
+  const nearLimitThreshold = Math.max(0, maxLength - 120);
+  refs.replyCharCount.classList.toggle(
+    "is-near-limit",
+    currentLength >= nearLimitThreshold && currentLength < maxLength,
+  );
+  refs.replyCharCount.classList.toggle("is-limit", currentLength >= maxLength);
+};
+
 const getDateTime = (rawDate) => toDateOrNull(rawDate)?.getTime?.() || 0;
 
-const sortRepliesByNewest = (replies) =>
-  [...replies].sort(
-    (a, b) => getDateTime(b.createdAt) - getDateTime(a.createdAt),
-  );
+const getSortedRepliesForDisplay = (replies) => {
+  const direction = state.repliesSort === "oldest" ? "oldest" : "newest";
+  return [...replies].sort((a, b) => {
+    const delta = getDateTime(b.createdAt) - getDateTime(a.createdAt);
+    return direction === "oldest" ? -delta : delta;
+  });
+};
+
+const ICON_SVG_MARKUP = {
+  externalLink:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link-icon lucide-external-link"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
+  eye: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye-icon lucide-eye"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>',
+  eyeOff:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye-off-icon lucide-eye-off"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>',
+  edit: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil-icon lucide-pencil"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>',
+  ban: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-ban-icon lucide-ban"><circle cx="12" cy="12" r="10"/><path d="M4.929 4.929 19.07 19.071"/></svg>',
+  trash:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2-icon lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+};
+
+const createActionIcon = (iconName) => {
+  const template = document.createElement("template");
+  template.innerHTML = (
+    ICON_SVG_MARKUP[iconName] || ICON_SVG_MARKUP.externalLink
+  ).trim();
+  const node = template.content.firstElementChild;
+  if (!(node instanceof SVGElement)) return null;
+  node.classList.add("forum-icon-action-svg");
+  node.setAttribute("aria-hidden", "true");
+  return node;
+};
+
+const buildIconAction = ({
+  label,
+  icon,
+  action = "",
+  danger = false,
+  tag = "button",
+  href = "",
+} = {}) => {
+  const node =
+    tag === "a" ?
+      document.createElement("a")
+    : document.createElement("button");
+
+  node.className = `forum-icon-action${danger ? " forum-icon-action-danger" : ""}`;
+  node.setAttribute("aria-label", label || "Acțiune");
+  node.setAttribute("title", label || "Acțiune");
+
+  if (node instanceof HTMLAnchorElement) {
+    node.href = href || "#";
+  } else {
+    node.type = "button";
+  }
+
+  if (action) {
+    node.dataset.action = action;
+  }
+
+  const iconNode = createActionIcon(icon);
+  if (iconNode) {
+    node.appendChild(iconNode);
+  }
+
+  const labelWrap = document.createElement("span");
+  labelWrap.className = "forum-icon-action-label";
+  labelWrap.textContent = label || "";
+
+  node.appendChild(labelWrap);
+  return node;
+};
 
 const pluralizeReplies = (count) => {
   if (count === 1) return "răspuns";
@@ -271,6 +476,63 @@ const describeError = (
   }
 
   return fallback;
+};
+
+const openNativeSelectPicker = (selectElement) => {
+  if (!(selectElement instanceof HTMLSelectElement)) return;
+  if (selectElement.disabled) return;
+
+  selectElement.focus({ preventScroll: true });
+
+  if (typeof selectElement.showPicker === "function") {
+    try {
+      selectElement.showPicker();
+      return;
+    } catch {
+      // Browser may block showPicker without a trusted click.
+    }
+  }
+
+  selectElement.click();
+};
+
+const bindSelectShell = (shellElement, selectElement) => {
+  if (!(shellElement instanceof HTMLElement)) return;
+  if (!(selectElement instanceof HTMLSelectElement)) return;
+  if (shellElement.dataset.selectShellBound === "true") return;
+
+  shellElement.dataset.selectShellBound = "true";
+
+  if (!shellElement.hasAttribute("tabindex")) {
+    shellElement.tabIndex = 0;
+  }
+
+  shellElement.addEventListener("click", (event) => {
+    if (event.target instanceof HTMLSelectElement) return;
+    event.preventDefault();
+    openNativeSelectPicker(selectElement);
+  });
+
+  shellElement.addEventListener("keydown", (event) => {
+    if (!["Enter", " ", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    openNativeSelectPicker(selectElement);
+  });
+};
+
+const updateBackToTopVisibility = () => {
+  if (!refs.backToTopBtn) return;
+
+  const shouldShow = window.scrollY > 720;
+  refs.backToTopBtn.hidden = !shouldShow;
+  refs.backToTopBtn.classList.toggle("is-visible", shouldShow);
+};
+
+const onBackToTopClick = () => {
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth",
+  });
 };
 
 const parseThreadRoute = () => {
@@ -329,6 +591,26 @@ const setModerationFeedback = (text, type = "") => {
   if (type === "success") refs.modFeedback.classList.add("is-success");
 };
 
+const setOwnerFeedback = (text, type = "") => {
+  if (!refs.ownerFeedback) return;
+
+  refs.ownerFeedback.textContent = text;
+  refs.ownerFeedback.classList.remove("is-error", "is-success");
+
+  if (type === "error") refs.ownerFeedback.classList.add("is-error");
+  if (type === "success") refs.ownerFeedback.classList.add("is-success");
+};
+
+const setBanFeedback = (text, type = "") => {
+  if (!refs.banFeedback) return;
+
+  refs.banFeedback.textContent = text;
+  refs.banFeedback.classList.remove("is-error", "is-success");
+
+  if (type === "error") refs.banFeedback.classList.add("is-error");
+  if (type === "success") refs.banFeedback.classList.add("is-success");
+};
+
 const showRepliesLoading = (isVisible) => {
   if (!refs.repliesLoading) return;
   refs.repliesLoading.hidden = !isVisible;
@@ -358,7 +640,8 @@ const getThreadRef = () => {
   return doc(db, THREADS_COLLECTION, state.routeThreadId);
 };
 
-const getCategoryById = (categoryId) => state.categoriesById.get(categoryId) || null;
+const getCategoryById = (categoryId) =>
+  state.categoriesById.get(categoryId) || null;
 
 const getThreadCategoryLabel = (thread) => {
   const category = getCategoryById(thread?.categoryId);
@@ -371,28 +654,50 @@ const getThreadCategoryLabel = (thread) => {
 const canSeeModeratedReplies = () => {
   if (!state.thread) return false;
   if (state.isModerator) return true;
-  return Boolean(state.authUser?.uid) && state.authUser.uid === state.thread.authorUid;
+  return (
+    Boolean(state.authUser?.uid) &&
+    state.authUser.uid === state.thread.authorUid
+  );
 };
 
-const canManageReply = (reply) => {
+const isThreadOwner = () =>
+  Boolean(state.thread?.authorUid) &&
+  Boolean(state.authUser?.uid) &&
+  state.thread.authorUid === state.authUser.uid;
+
+const canEditReply = (reply) => {
   if (!reply || !state.authUser) return false;
-  if (state.isModerator) return true;
   return reply.authorUid === state.authUser.uid;
+};
+
+const canDeleteReply = (reply) => {
+  if (!reply || !state.authUser) return false;
+  return state.isModerator || reply.authorUid === state.authUser.uid;
+};
+
+const canToggleReplyModeration = (reply) => {
+  if (!reply || !state.authUser) return false;
+  return state.isModerator;
 };
 
 const updateMetaTags = (thread, canonicalPath) => {
   const title = toTrimmedString(thread?.title) || "Subiect Forum";
   const body = toTrimmedString(thread?.body);
   const description =
-    body ? body.slice(0, 160) : "Discuție individuală din comunitatea Educheia.";
+    body ?
+      body.slice(0, 160)
+    : "Discuție individuală din comunitatea Educheia.";
 
-  document.title = `Subiect: ${title} | Forum Educheia`;
+  document.title = `${title} | Forum Educheia`;
 
-  if (refs.metaDescription) refs.metaDescription.setAttribute("content", description);
+  if (refs.metaDescription)
+    refs.metaDescription.setAttribute("content", description);
   if (refs.ogTitle) refs.ogTitle.setAttribute("content", title);
-  if (refs.ogDescription) refs.ogDescription.setAttribute("content", description);
+  if (refs.ogDescription)
+    refs.ogDescription.setAttribute("content", description);
   if (refs.twitterTitle) refs.twitterTitle.setAttribute("content", title);
-  if (refs.twitterDescription) refs.twitterDescription.setAttribute("content", description);
+  if (refs.twitterDescription)
+    refs.twitterDescription.setAttribute("content", description);
 
   const canonicalUrl = `${PUBLIC_ORIGIN}${canonicalPath}`;
 
@@ -474,11 +779,32 @@ const getUserClaims = async (user) => {
   }
 };
 
-const resolveCurrentUserForumRole = async (user, claims = {}) => {
+const loadCurrentUserRoleData = async (user) => {
+  if (!user) return null;
+
+  try {
+    const roleSnapshot = await getDoc(doc(db, USER_ROLES_COLLECTION, user.uid));
+    if (!roleSnapshot.exists()) return null;
+    return roleSnapshot.data() || null;
+  } catch {
+    return null;
+  }
+};
+
+const resolveCurrentUserForumRole = async (
+  user,
+  claims = {},
+  roleData = null,
+) => {
   if (!user) return "member";
 
   if (claims.admin === true || claims.role === "admin") return "admin";
-  if (claims.moderator === true || claims.role === "moderator") return "moderator";
+  if (claims.moderator === true || claims.role === "moderator")
+    return "moderator";
+
+  if (roleData) {
+    return normalizeForumRole(roleData.role);
+  }
 
   try {
     const roleSnapshot = await getDoc(doc(db, USER_ROLES_COLLECTION, user.uid));
@@ -523,19 +849,30 @@ const waitForInitialAuth = () =>
 const applyAuthState = async (user) => {
   state.authUser = user || null;
   state.authClaims = {};
+  state.currentUserRoleData = null;
   state.forumRole = "member";
   state.isAdmin = false;
   state.isModerator = false;
+  state.commentPostingRestriction = null;
 
   if (!state.authUser) {
     state.authSignature = "guest";
     return;
   }
 
+  state.currentUserRoleData = await loadCurrentUserRoleData(state.authUser);
   state.authClaims = await getUserClaims(state.authUser);
-  state.forumRole = await resolveCurrentUserForumRole(state.authUser, state.authClaims);
+  state.forumRole = await resolveCurrentUserForumRole(
+    state.authUser,
+    state.authClaims,
+    state.currentUserRoleData,
+  );
   state.isAdmin = state.forumRole === "admin";
   state.isModerator = state.isAdmin || state.forumRole === "moderator";
+  state.commentPostingRestriction = getActivePostingRestriction(
+    state.currentUserRoleData,
+    "comments",
+  );
   state.authSignature = `${state.authUser.uid}|${state.forumRole}`;
 };
 
@@ -574,7 +911,9 @@ const loadCategories = async () => {
     });
 
   state.categories = categories;
-  state.categoriesById = new Map(categories.map((category) => [category.id, category]));
+  state.categoriesById = new Map(
+    categories.map((category) => [category.id, category]),
+  );
 };
 
 const ensureThreadCategoryPresent = () => {
@@ -601,9 +940,12 @@ const renderThreadBadges = () => {
 
   const badges = [];
 
-  if (state.thread.isSticky) badges.push({ text: "sticky", className: "forum-pill forum-pill-sticky" });
-  if (state.thread.isLocked) badges.push({ text: "blocată", className: "forum-pill" });
-  if (state.thread.authorIsAdmin) badges.push({ text: "echipă", className: "forum-pill forum-pill-admin" });
+  if (state.thread.isSticky)
+    badges.push({ text: "sticky", className: "forum-pill forum-pill-sticky" });
+  if (state.thread.isLocked)
+    badges.push({ text: "blocată", className: "forum-pill" });
+  if (state.thread.authorIsAdmin)
+    badges.push({ text: "echipă", className: "forum-pill forum-pill-admin" });
   if (state.thread.moderationStatus !== "visible") {
     badges.push({
       text: `status: ${state.thread.moderationStatus}`,
@@ -630,61 +972,231 @@ const updateSidebarStats = () => {
   });
 
   if (refs.sidebarTotalReplies) {
-    refs.sidebarTotalReplies.textContent = String(safeInt(state.thread.commentCount, 0));
+    refs.sidebarTotalReplies.textContent = String(
+      safeInt(state.thread.commentCount, 0),
+    );
   }
 
   if (refs.sidebarParticipants) {
-    refs.sidebarParticipants.textContent = String(Math.max(participants.size, 1));
+    refs.sidebarParticipants.textContent = String(
+      Math.max(participants.size, 1),
+    );
   }
+};
+
+const rebuildModerationTargets = () => {
+  const nextTargets = new Map();
+
+  const addTarget = (uid, name) => {
+    const normalizedUid = toTrimmedString(uid);
+    if (!normalizedUid) return;
+
+    const normalizedName = toTrimmedString(name) || "Membru";
+    const existing = nextTargets.get(normalizedUid);
+    if (!existing || existing.name === "Membru") {
+      nextTargets.set(normalizedUid, {
+        uid: normalizedUid,
+        name: normalizedName,
+      });
+    }
+  };
+
+  if (state.thread) {
+    addTarget(state.thread.authorUid, state.thread.authorName);
+  }
+
+  state.replies.forEach((reply) => {
+    addTarget(reply.authorUid, reply.authorName);
+  });
+
+  state.moderationTargets = nextTargets;
+};
+
+const renderBanTargetSummary = () => {
+  if (!refs.banTargetSummary) return;
+
+  const targetUid = getBanTargetUid();
+  if (!targetUid) {
+    refs.banTargetSummary.textContent =
+      "Selectează un utilizator din conversație sau completează UID-ul manual.";
+    return;
+  }
+
+  const knownTarget = state.moderationTargets.get(targetUid);
+  if (!knownTarget) {
+    refs.banTargetSummary.textContent = `UID manual: ${formatCompactUid(targetUid)}`;
+    return;
+  }
+
+  refs.banTargetSummary.textContent = `Selectat: ${knownTarget.name} (${formatCompactUid(knownTarget.uid)})`;
+};
+
+const renderBanTargetOptions = () => {
+  if (!refs.banTargetUser) return;
+
+  const previousUid =
+    toTrimmedString(refs.banTargetUser.value) ||
+    toTrimmedString(refs.banTargetUid?.value);
+
+  clearNode(refs.banTargetUser);
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Selectează un utilizator din conversație";
+  refs.banTargetUser.appendChild(placeholder);
+
+  const orderedTargets = [...state.moderationTargets.values()].sort((a, b) =>
+    a.name.localeCompare(b.name, "ro"),
+  );
+
+  orderedTargets.forEach((target) => {
+    const option = document.createElement("option");
+    option.value = target.uid;
+    option.textContent = `${target.name} · ${formatCompactUid(target.uid)}`;
+    refs.banTargetUser.appendChild(option);
+  });
+
+  let nextValue = previousUid;
+  if (!nextValue && state.thread?.authorUid) {
+    nextValue = toTrimmedString(state.thread.authorUid);
+  }
+
+  if (nextValue && orderedTargets.some((target) => target.uid === nextValue)) {
+    refs.banTargetUser.value = nextValue;
+  } else {
+    refs.banTargetUser.value = "";
+  }
+
+  if (refs.banTargetUid) {
+    refs.banTargetUid.value = refs.banTargetUser.value ? "" : nextValue || "";
+  }
+
+  renderBanTargetSummary();
 };
 
 const renderThreadSummary = () => {
   if (!state.thread) return;
 
-  refs.threadTitle.textContent = state.thread.title;
+  if (refs.threadTitle) {
+    refs.threadTitle.textContent = state.thread.title;
+  }
+  if (refs.threadSummaryTitle) {
+    refs.threadSummaryTitle.textContent = state.thread.title;
+  }
   refs.threadBody.textContent =
     state.thread.body || "Nu există conținut text pentru acest subiect.";
   refs.threadAuthorName.textContent = state.thread.authorName;
-  refs.threadAuthorAvatar.textContent = extractInitials(state.thread.authorName);
+  refs.threadAuthorAvatar.textContent = extractInitials(
+    state.thread.authorName,
+  );
   refs.threadCreatedAt.textContent = formatRelativeTime(state.thread.createdAt);
   refs.threadCategory.textContent = getThreadCategoryLabel(state.thread);
-  refs.threadRepliesCount.textContent = String(safeInt(state.thread.commentCount, 0));
+  refs.threadRepliesCount.textContent = String(
+    safeInt(state.thread.commentCount, 0),
+  );
 
   const activityDate = state.thread.lastActivityAt || state.thread.createdAt;
   refs.threadLastActivity.textContent = `Ultima activitate: ${formatRelativeTime(activityDate)} (${formatAbsoluteTime(activityDate)})`;
 
   renderThreadBadges();
+  rebuildModerationTargets();
+  renderBanTargetOptions();
   updateSidebarStats();
 };
 
+const openReplyComposer = ({ focusInput = true } = {}) => {
+  if (refs.replyComposeTrigger?.disabled) return;
+
+  state.replyComposerExpanded = true;
+  renderReplyComposer();
+  if (focusInput && refs.replyInput && !refs.replyInput.disabled) {
+    refs.replyInput.focus();
+  }
+};
+
+const collapseReplyComposer = ({ clearDraft = false, force = false } = {}) => {
+  if (state.isSubmittingReply && !force) return;
+
+  state.replyComposerExpanded = false;
+
+  if (clearDraft && refs.replyInput) {
+    refs.replyInput.value = "";
+    renderReplyCharacterCounter();
+  }
+
+  renderReplyComposer();
+};
+
 const renderReplyComposer = () => {
-  if (!refs.replyInput || !refs.replySubmit || !refs.replyAuthNote) return;
+  if (
+    !refs.replyInput ||
+    !refs.replySubmit ||
+    !refs.replyAuthNote ||
+    !refs.replyComposeTrigger ||
+    !refs.replyForm
+  ) {
+    return;
+  }
 
   const isSignedIn = Boolean(state.authUser);
-  const threadLockedForUser = Boolean(state.thread?.isLocked) && !state.isModerator;
-  const isDisabled = !isSignedIn || threadLockedForUser || state.isSubmittingReply;
+  const threadLockedForUser =
+    Boolean(state.thread?.isLocked) && !state.isModerator;
+  const restriction = state.commentPostingRestriction;
+  const isRestricted = Boolean(restriction);
+  const isDisabled =
+    !isSignedIn ||
+    threadLockedForUser ||
+    isRestricted ||
+    state.isSubmittingReply;
 
   refs.replyInput.disabled = isDisabled;
   refs.replySubmit.disabled = isDisabled;
+  if (refs.replyCancelBtn)
+    refs.replyCancelBtn.disabled = state.isSubmittingReply;
   refs.replySubmit.textContent =
-    state.isSubmittingReply ? "Se publică..." : "Publică răspunsul";
+    state.isSubmittingReply ? "Se trimite..." : "Comentează";
+  renderReplyCharacterCounter();
+
+  refs.replyComposeTrigger.hidden = state.replyComposerExpanded;
+  refs.replyForm.hidden = !state.replyComposerExpanded;
+  refs.replyComposeTrigger.disabled = isDisabled;
+  refs.replyComposeTrigger.classList.toggle("is-disabled", isDisabled);
 
   if (!isSignedIn) {
+    refs.replyComposeTrigger.textContent = "Conectează-te pentru a comenta";
     refs.replyInput.placeholder = "Autentifică-te pentru a răspunde.";
     refs.replyAuthNote.innerHTML =
       'Trebuie să fii autentificat pentru a răspunde. <a href="/login" class="forum-inline-link">Login</a>';
+    autoResizeReplyInput();
     return;
   }
 
   if (threadLockedForUser) {
-    refs.replyInput.placeholder = "Subiect blocat: doar moderatorii mai pot răspunde.";
+    refs.replyComposeTrigger.textContent = "Subiect blocat";
+    refs.replyInput.placeholder =
+      "Subiect blocat: doar moderatorii mai pot răspunde.";
     refs.replyAuthNote.textContent =
       "Subiectul este blocat momentan. Doar moderatorii și administratorii pot publica.";
+    autoResizeReplyInput();
     return;
   }
 
-  refs.replyInput.placeholder = "Scrie un răspuns util și respectuos.";
+  if (isRestricted) {
+    refs.replyComposeTrigger.textContent = "Comentariile sunt restricționate";
+    refs.replyInput.placeholder =
+      "Publicarea de comentarii este restricționată.";
+    refs.replyAuthNote.textContent = describePostingRestriction(
+      restriction,
+      "comentarii",
+    );
+    autoResizeReplyInput();
+    return;
+  }
+
+  refs.replyComposeTrigger.textContent = "Participă la conversație";
+  refs.replyInput.placeholder = "Scrie un răspuns clar și util.";
   refs.replyAuthNote.textContent = `Răspunzi ca ${extractDisplayName(state.authUser)}.`;
+  autoResizeReplyInput();
 };
 
 const buildReplyBadge = (className, text) => {
@@ -696,8 +1208,16 @@ const buildReplyBadge = (className, text) => {
 
 const renderReplies = () => {
   clearNode(refs.repliesList);
+  if (
+    refs.repliesSortSelect &&
+    refs.repliesSortSelect.value !== state.repliesSort
+  ) {
+    refs.repliesSortSelect.value = state.repliesSort;
+  }
 
-  const replies = state.replies;
+  const replies = getSortedRepliesForDisplay(state.replies);
+  rebuildModerationTargets();
+  renderBanTargetOptions();
 
   if (!replies.length) {
     refs.repliesEmpty.hidden = false;
@@ -747,7 +1267,9 @@ const renderReplies = () => {
     badges.className = "forum-reply-badges";
 
     if (reply.authorIsAdmin) {
-      badges.appendChild(buildReplyBadge("forum-pill forum-pill-admin", "echipă"));
+      badges.appendChild(
+        buildReplyBadge("forum-pill forum-pill-admin", "echipă"),
+      );
     }
 
     if (reply.moderationStatus !== "visible") {
@@ -760,34 +1282,61 @@ const renderReplies = () => {
     authorWrap.append(avatar, meta);
     head.appendChild(authorWrap);
 
-    const canManage = canManageReply(reply);
-    if (canManage) {
+    const canEdit = canEditReply(reply);
+    const canDelete = canDeleteReply(reply);
+    const canModerate = canToggleReplyModeration(reply);
+
+    if (canEdit || canDelete || canModerate) {
       const actions = document.createElement("div");
       actions.className = "forum-reply-actions";
 
       const isEditing = state.editingReplyId === reply.id;
 
-      const editBtn = document.createElement("button");
-      editBtn.type = "button";
-      editBtn.className = "forum-reply-action";
-      editBtn.dataset.action = isEditing ? "cancel-edit" : "start-edit";
-      editBtn.dataset.replyId = reply.id;
-      editBtn.textContent = isEditing ? "Anulează" : "Editează";
+      if (canEdit) {
+        const editBtn = buildIconAction({
+          label: isEditing ? "Anulează editarea" : "Editează",
+          icon: "edit",
+          action: isEditing ? "cancel-edit" : "start-edit",
+        });
+        editBtn.dataset.replyId = reply.id;
+        actions.appendChild(editBtn);
+      }
 
-      const deleteBtn = document.createElement("button");
-      deleteBtn.type = "button";
-      deleteBtn.className = "forum-reply-action forum-reply-action-danger";
-      deleteBtn.dataset.action = "delete-reply";
-      deleteBtn.dataset.replyId = reply.id;
-      deleteBtn.textContent = "Șterge";
+      if (canModerate) {
+        const visibilityBtn = buildIconAction({
+          label: reply.moderationStatus === "hidden" ? "Afișează" : "Ascunde",
+          icon: reply.moderationStatus === "hidden" ? "eye" : "eyeOff",
+          action: "toggle-reply-visibility",
+        });
+        visibilityBtn.dataset.replyId = reply.id;
+        actions.appendChild(visibilityBtn);
 
-      actions.append(editBtn, deleteBtn);
+        const banAuthorBtn = buildIconAction({
+          label: "Restricționează autor",
+          icon: "ban",
+          action: "ban-reply-author",
+        });
+        banAuthorBtn.dataset.replyAuthorUid = reply.authorUid;
+        actions.appendChild(banAuthorBtn);
+      }
+
+      if (canDelete) {
+        const deleteBtn = buildIconAction({
+          label: "Șterge",
+          icon: "trash",
+          action: "delete-reply",
+          danger: true,
+        });
+        deleteBtn.dataset.replyId = reply.id;
+        actions.appendChild(deleteBtn);
+      }
+
       head.appendChild(actions);
     }
 
     article.appendChild(head);
 
-    if (state.editingReplyId === reply.id) {
+    if (state.editingReplyId === reply.id && canEditReply(reply)) {
       const editForm = document.createElement("form");
       editForm.className = "forum-reply-edit-form";
       editForm.dataset.replyId = reply.id;
@@ -829,64 +1378,150 @@ const renderReplies = () => {
 
   refs.repliesList.appendChild(fragment);
 
+  const loadedCount = replies.length;
   const totalKnown = replies.length;
   const summaryCount = safeInt(state.thread?.commentCount, totalKnown);
-  setRepliesStatus(`${summaryCount} ${pluralizeReplies(summaryCount)} în acest subiect.`);
+  const sortLabel =
+    state.repliesSort === "oldest" ?
+      "cele mai vechi primele"
+    : "cele mai noi primele";
+  const paginationNote =
+    state.hasMoreReplies ?
+      ` Încarcă mai multe pentru următoarele ${REPLIES_PAGE_SIZE}.`
+    : "";
+  setRepliesStatus(
+    `${summaryCount} ${pluralizeReplies(summaryCount)} în acest subiect · afișate ${loadedCount} (${sortLabel}).${paginationNote}`,
+  );
 
   refs.repliesLoadMore.hidden = !state.hasMoreReplies;
   refs.repliesLoadMore.disabled = state.isLoadingReplies;
-  refs.repliesLoadMore.textContent = state.isLoadingReplies ? "Se încarcă..." : "Încarcă mai multe";
+  refs.repliesLoadMore.textContent =
+    state.isLoadingReplies ? "Se încarcă..." : "Încarcă mai multe";
 
   updateSidebarStats();
 };
 
 const renderModerationPanel = () => {
-  if (!refs.moderationPanel || !refs.moderationForm || !state.thread) return;
+  if (!refs.moderationPanel || !state.thread) return;
 
-  if (!state.isModerator) {
+  const canOwnerEdit = isThreadOwner();
+  const canModerate = state.isModerator;
+
+  if (!canOwnerEdit && !canModerate) {
     refs.moderationPanel.hidden = true;
+    if (refs.threadToolsDetails) refs.threadToolsDetails.open = false;
+    if (refs.ownerSection) refs.ownerSection.hidden = true;
+    if (refs.moderationSection) refs.moderationSection.hidden = true;
+    if (refs.restrictionSection) refs.restrictionSection.hidden = true;
     return;
   }
 
   refs.moderationPanel.hidden = false;
+  if (refs.ownerSection) refs.ownerSection.hidden = !canOwnerEdit;
+  if (refs.moderationSection) refs.moderationSection.hidden = !canModerate;
+  if (refs.restrictionSection) refs.restrictionSection.hidden = !canModerate;
 
-  refs.modTitle.value = state.thread.title;
-  refs.modBody.value = state.thread.body;
-  refs.modStatus.value = VALID_MODERATION_STATUSES.has(state.thread.moderationStatus) ?
-      state.thread.moderationStatus
-    : "visible";
-  refs.modLocked.checked = Boolean(state.thread.isLocked);
-  refs.modSticky.checked = Boolean(state.thread.isSticky);
-  refs.modSticky.disabled = !state.isAdmin;
+  if (refs.threadToolsSubtitle) {
+    refs.threadToolsSubtitle.textContent =
+      canOwnerEdit && canModerate ? "Editor autor + moderare"
+      : canOwnerEdit ? "Editor autor"
+      : "Moderare și restricții";
+  }
 
-  refs.modStickyHint.textContent =
-    state.isAdmin ?
-      "Ai rol admin: poți controla statusul sticky al subiectului."
-    : "Ai rol moderator: sticky este blocat și poate fi schimbat doar de admin.";
+  if (refs.moderationCopy) {
+    refs.moderationCopy.textContent =
+      canOwnerEdit && canModerate ?
+        "Poți edita conținutul propriu și poți modera subiectul."
+      : canOwnerEdit ? "Doar autorul poate schimba titlul și conținutul."
+      : "Poți modera statusul, șterge subiectul și restricționa publicarea.";
+  }
 
-  clearNode(refs.modCategory);
+  if (refs.ownerForm && refs.ownerTitle && refs.ownerBody && refs.ownerSubmit) {
+    refs.ownerForm.hidden = !canOwnerEdit;
+    if (canOwnerEdit) {
+      refs.ownerTitle.value = state.thread.title;
+      refs.ownerBody.value = state.thread.body;
+      refs.ownerSubmit.disabled = state.isSavingOwnerEdit;
+      refs.ownerSubmit.textContent =
+        state.isSavingOwnerEdit ? "Se salvează..." : "Salvează conținutul";
+    }
+  }
 
-  const categories = state.categories.length ? state.categories : [
-    {
-      id: state.thread.categoryId,
-      name: getThreadCategoryLabel(state.thread),
-      type: state.thread.categoryType,
-    },
-  ];
+  if (
+    refs.moderationForm &&
+    refs.modCategory &&
+    refs.modStatus &&
+    refs.modLocked &&
+    refs.modSticky &&
+    refs.modSubmit
+  ) {
+    refs.moderationForm.hidden = !canModerate;
+    if (canModerate) {
+      refs.modStatus.value =
+        VALID_MODERATION_STATUSES.has(state.thread.moderationStatus) ?
+          state.thread.moderationStatus
+        : "visible";
+      refs.modLocked.checked = Boolean(state.thread.isLocked);
+      refs.modSticky.checked = Boolean(state.thread.isSticky);
+      refs.modSticky.disabled = !state.isAdmin;
 
-  categories.forEach((category) => {
-    const option = document.createElement("option");
-    option.value = category.id;
-    option.textContent =
-      category.type === "admin" ? `${category.name} (admin)` : category.name;
-    refs.modCategory.appendChild(option);
-  });
+      clearNode(refs.modCategory);
+      const categories =
+        state.categories.length ?
+          state.categories
+        : [
+            {
+              id: state.thread.categoryId,
+              name: getThreadCategoryLabel(state.thread),
+              type: state.thread.categoryType,
+            },
+          ];
 
-  refs.modCategory.value = state.thread.categoryId;
+      categories.forEach((category) => {
+        const option = document.createElement("option");
+        option.value = category.id;
+        option.textContent =
+          category.type === "admin" ?
+            `${category.name} (admin)`
+          : category.name;
+        refs.modCategory.appendChild(option);
+      });
 
-  refs.modSubmit.disabled = state.isSavingModeration;
-  refs.modSubmit.textContent =
-    state.isSavingModeration ? "Se salvează..." : "Salvează modificările";
+      refs.modCategory.value = state.thread.categoryId;
+      refs.modCategory.disabled = !state.isAdmin;
+
+      refs.modStickyHint.textContent =
+        state.isAdmin ?
+          "Ca admin poți schimba categoria și sticky."
+        : "Ca moderator poți doar bloca/debloca și schimba statusul.";
+
+      refs.modSubmit.disabled = state.isSavingModeration;
+      refs.modSubmit.textContent =
+        state.isSavingModeration ? "Se salvează..." : "Salvează moderarea";
+      if (refs.modDelete) refs.modDelete.disabled = state.isSavingModeration;
+    }
+  }
+
+  if (
+    refs.banForm &&
+    refs.banUseThreadAuthor &&
+    refs.banSubmit &&
+    refs.banClear
+  ) {
+    refs.banForm.hidden = !canModerate;
+    if (canModerate) {
+      renderBanTargetOptions();
+      refs.banUseThreadAuthor.disabled = !toTrimmedString(
+        state.thread.authorUid,
+      );
+      refs.banSubmit.disabled = state.isSavingBan;
+      refs.banClear.disabled = state.isSavingBan;
+      refs.banSubmit.textContent =
+        state.isSavingBan ? "Se aplică..." : "Aplică restricția";
+    } else {
+      renderBanTargetSummary();
+    }
+  }
 };
 
 const buildRepliesQuery = () => {
@@ -974,7 +1609,9 @@ const loadReplies = async ({ reset = false } = {}) => {
 
     if (isMissingIndexError && !state.repliesUsingIndexFallback) {
       try {
-        const fallbackConstraints = [where("moderationStatus", "==", "visible")];
+        const fallbackConstraints = [
+          where("moderationStatus", "==", "visible"),
+        ];
 
         if (canSeeModeratedReplies()) {
           fallbackConstraints.length = 0;
@@ -996,9 +1633,7 @@ const loadReplies = async ({ reset = false } = {}) => {
 
         if (requestId !== state.repliesRequestId) return;
 
-        const mapped = sortRepliesByNewest(
-          fallbackSnapshot.docs.map(mapReplyDoc),
-        );
+        const mapped = fallbackSnapshot.docs.map(mapReplyDoc);
 
         state.replies = mapped;
         state.repliesCursor = null;
@@ -1039,7 +1674,10 @@ const refreshThreadDocument = async () => {
   state.thread = mapThreadDoc(snapshot);
   ensureThreadCategoryPresent();
 
-  const canonicalPath = buildCanonicalThreadPath(state.thread.id, state.thread.title);
+  const canonicalPath = buildCanonicalThreadPath(
+    state.thread.id,
+    state.thread.title,
+  );
   updateMetaTags(state.thread, canonicalPath);
 
   renderThreadSummary();
@@ -1071,7 +1709,10 @@ const loadThread = async () => {
     state.thread = mapThreadDoc(snapshot);
     ensureThreadCategoryPresent();
 
-    const canonicalPath = buildCanonicalThreadPath(state.thread.id, state.thread.title);
+    const canonicalPath = buildCanonicalThreadPath(
+      state.thread.id,
+      state.thread.title,
+    );
     const currentPath = normalizePath(window.location.pathname);
     const hasTidParam = new URLSearchParams(window.location.search).has("tid");
 
@@ -1113,8 +1754,19 @@ const submitNewReply = async () => {
 
   if (!state.thread) return;
 
+  if (state.commentPostingRestriction) {
+    setReplyFeedback(
+      describePostingRestriction(state.commentPostingRestriction, "comentarii"),
+      "error",
+    );
+    return;
+  }
+
   if (state.thread.isLocked && !state.isModerator) {
-    setReplyFeedback("Subiectul este blocat. Nu poți publica răspunsuri noi.", "error");
+    setReplyFeedback(
+      "Subiectul este blocat. Nu poți publica răspunsuri noi.",
+      "error",
+    );
     return;
   }
 
@@ -1176,11 +1828,44 @@ const submitNewReply = async () => {
     });
 
     refs.replyInput.value = "";
+    renderReplyCharacterCounter();
+    autoResizeReplyInput();
     setReplyFeedback("Răspunsul a fost publicat.", "success");
 
     await refreshThreadDocument();
     await loadReplies({ reset: true });
+    collapseReplyComposer({ clearDraft: true, force: true });
+    setReplyFeedback("");
   } catch (error) {
+    if (error?.code === "permission-denied") {
+      if (state.commentPostingRestriction) {
+        setReplyFeedback(
+          describePostingRestriction(
+            state.commentPostingRestriction,
+            "comentarii",
+          ),
+          "error",
+        );
+        return;
+      }
+
+      const freshRoleData = await loadCurrentUserRoleData(state.authUser);
+      const freshRestriction = getActivePostingRestriction(
+        freshRoleData,
+        "comments",
+      );
+      if (freshRestriction) {
+        state.currentUserRoleData = freshRoleData;
+        state.commentPostingRestriction = freshRestriction;
+        renderReplyComposer();
+        setReplyFeedback(
+          describePostingRestriction(freshRestriction, "comentarii"),
+          "error",
+        );
+        return;
+      }
+    }
+
     const isCounterSyncDenied = error?.code === "permission-denied";
 
     if (isCounterSyncDenied) {
@@ -1196,12 +1881,16 @@ const submitNewReply = async () => {
         );
 
         refs.replyInput.value = "";
+        renderReplyCharacterCounter();
+        autoResizeReplyInput();
         setReplyFeedback(
           "Răspuns publicat. Contorul thread-ului nu a putut fi actualizat automat.",
           "success",
         );
         await refreshThreadDocument();
         await loadReplies({ reset: true });
+        collapseReplyComposer({ clearDraft: true, force: true });
+        setReplyFeedback("");
         return;
       } catch {
         // Continue to the standard error message below.
@@ -1222,7 +1911,7 @@ const saveEditedReply = async (replyId) => {
   const reply = state.replies.find((item) => item.id === replyId);
   if (!reply) return;
 
-  if (!canManageReply(reply)) {
+  if (!canEditReply(reply)) {
     setReplyFeedback("Nu ai permisiunea de a edita acest răspuns.", "error");
     return;
   }
@@ -1248,7 +1937,13 @@ const saveEditedReply = async (replyId) => {
 
   try {
     await updateDoc(
-      doc(db, THREADS_COLLECTION, state.thread.id, THREAD_REPLIES_COLLECTION, replyId),
+      doc(
+        db,
+        THREADS_COLLECTION,
+        state.thread.id,
+        THREAD_REPLIES_COLLECTION,
+        replyId,
+      ),
       {
         body: nextBody,
         updatedAt: serverTimestamp(),
@@ -1271,7 +1966,7 @@ const deleteReply = async (replyId) => {
   const reply = state.replies.find((item) => item.id === replyId);
   if (!reply) return;
 
-  if (!canManageReply(reply)) {
+  if (!canDeleteReply(reply)) {
     setReplyFeedback("Nu ai permisiunea de a șterge acest răspuns.", "error");
     return;
   }
@@ -1353,28 +2048,10 @@ const deleteReply = async (replyId) => {
 const submitModerationUpdate = async () => {
   if (!state.thread || !state.isModerator || state.isSavingModeration) return;
 
-  const nextTitle = toTrimmedString(refs.modTitle.value);
-  const nextBody = toTrimmedString(refs.modBody.value);
   const nextCategoryId = toTrimmedString(refs.modCategory.value);
   const nextStatus = toTrimmedString(refs.modStatus.value);
   const nextLocked = Boolean(refs.modLocked.checked);
   const nextSticky = Boolean(refs.modSticky.checked);
-
-  if (nextTitle.length < 6 || nextTitle.length > 160) {
-    setModerationFeedback("Titlul trebuie să aibă între 6 și 160 de caractere.", "error");
-    return;
-  }
-
-  if (nextBody.length < 12 || nextBody.length > 8000) {
-    setModerationFeedback("Conținutul trebuie să aibă între 12 și 8000 caractere.", "error");
-    return;
-  }
-
-  const selectedCategory = getCategoryById(nextCategoryId);
-  if (!selectedCategory) {
-    setModerationFeedback("Selectează o categorie validă.", "error");
-    return;
-  }
 
   if (!VALID_MODERATION_STATUSES.has(nextStatus)) {
     setModerationFeedback("Statusul de moderare este invalid.", "error");
@@ -1382,17 +2059,6 @@ const submitModerationUpdate = async () => {
   }
 
   const updates = {};
-
-  if (nextTitle !== state.thread.title) updates.title = nextTitle;
-  if (nextBody !== state.thread.body) updates.body = nextBody;
-
-  if (
-    nextCategoryId !== state.thread.categoryId ||
-    selectedCategory.type !== state.thread.categoryType
-  ) {
-    updates.categoryId = nextCategoryId;
-    updates.categoryType = selectedCategory.type;
-  }
 
   if (nextStatus !== state.thread.moderationStatus) {
     updates.moderationStatus = nextStatus;
@@ -1406,6 +2072,22 @@ const submitModerationUpdate = async () => {
     updates.isSticky = nextSticky;
   }
 
+  if (state.isAdmin) {
+    const selectedCategory = getCategoryById(nextCategoryId);
+    if (!selectedCategory) {
+      setModerationFeedback("Selectează o categorie validă.", "error");
+      return;
+    }
+
+    if (
+      selectedCategory.id !== state.thread.categoryId ||
+      selectedCategory.type !== state.thread.categoryType
+    ) {
+      updates.categoryId = selectedCategory.id;
+      updates.categoryType = selectedCategory.type;
+    }
+  }
+
   if (!Object.keys(updates).length) {
     setModerationFeedback("Nu există modificări de salvat.");
     return;
@@ -1415,13 +2097,12 @@ const submitModerationUpdate = async () => {
   updates.lastActivityAt = serverTimestamp();
 
   state.isSavingModeration = true;
-  refs.modSubmit.disabled = true;
-  refs.modSubmit.textContent = "Se salvează...";
+  renderModerationPanel();
 
   try {
     await updateDoc(getThreadRef(), updates);
 
-    setModerationFeedback("Modificările au fost salvate.", "success");
+    setModerationFeedback("Moderarea a fost salvată.", "success");
 
     const refreshed = await refreshThreadDocument();
     if (!refreshed) {
@@ -1437,9 +2118,267 @@ const submitModerationUpdate = async () => {
     );
   } finally {
     state.isSavingModeration = false;
-    refs.modSubmit.disabled = false;
-    refs.modSubmit.textContent = "Salvează modificările";
+    renderModerationPanel();
   }
+};
+
+const submitOwnerThreadEdit = async () => {
+  if (!state.thread || !isThreadOwner() || state.isSavingOwnerEdit) return;
+  if (!refs.ownerTitle || !refs.ownerBody) return;
+
+  const nextTitle = toTrimmedString(refs.ownerTitle.value);
+  const nextBody = toTrimmedString(refs.ownerBody.value);
+
+  if (nextTitle.length < 6 || nextTitle.length > 160) {
+    setOwnerFeedback(
+      "Titlul trebuie să aibă între 6 și 160 de caractere.",
+      "error",
+    );
+    return;
+  }
+
+  if (nextBody.length < 12 || nextBody.length > 8000) {
+    setOwnerFeedback(
+      "Conținutul trebuie să aibă între 12 și 8000 caractere.",
+      "error",
+    );
+    return;
+  }
+
+  if (nextTitle === state.thread.title && nextBody === state.thread.body) {
+    setOwnerFeedback("Nu există modificări de salvat.");
+    return;
+  }
+
+  state.isSavingOwnerEdit = true;
+  renderModerationPanel();
+
+  try {
+    await updateDoc(getThreadRef(), {
+      title: nextTitle,
+      body: nextBody,
+      updatedAt: serverTimestamp(),
+    });
+
+    setOwnerFeedback("Conținutul subiectului a fost actualizat.", "success");
+    await refreshThreadDocument();
+  } catch (error) {
+    setOwnerFeedback(
+      describeError(error, "Nu am putut salva modificările de conținut."),
+      "error",
+    );
+  } finally {
+    state.isSavingOwnerEdit = false;
+    renderModerationPanel();
+  }
+};
+
+const deleteThreadWithModeration = async () => {
+  if (!state.thread || !state.isModerator || state.isSavingModeration) return;
+
+  const shouldDelete = window.confirm(
+    "Confirmi ștergerea definitivă a subiectului?",
+  );
+  if (!shouldDelete) return;
+
+  state.isSavingModeration = true;
+  renderModerationPanel();
+
+  try {
+    await deleteDoc(getThreadRef());
+    window.location.href = "/forum";
+  } catch (error) {
+    setModerationFeedback(
+      describeError(error, "Nu am putut șterge subiectul."),
+      "error",
+    );
+    state.isSavingModeration = false;
+    renderModerationPanel();
+  }
+};
+
+const applyPostingRestriction = async () => {
+  if (!state.authUser || !state.isModerator || state.isSavingBan) return;
+  if (!refs.banScope || !refs.banDuration || !refs.banReason) return;
+
+  const targetUid = getBanTargetUid();
+  const scope = toTrimmedString(refs.banScope.value);
+  const durationDays = Number.parseInt(
+    toTrimmedString(refs.banDuration.value),
+    10,
+  );
+  const reason = toTrimmedString(refs.banReason.value);
+
+  if (!targetUid) {
+    setBanFeedback(
+      "Selectează utilizatorul pe care vrei să-l restricționezi.",
+      "error",
+    );
+    return;
+  }
+
+  if (!["threads", "comments", "both"].includes(scope)) {
+    setBanFeedback("Tipul restricției este invalid.", "error");
+    return;
+  }
+
+  if (!Number.isFinite(durationDays) || durationDays <= 0) {
+    setBanFeedback("Durata trebuie să fie un număr pozitiv de zile.", "error");
+    return;
+  }
+
+  const until = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000);
+
+  const payload = {
+    updatedAt: serverTimestamp(),
+    updatedByUid: state.authUser.uid,
+    isBanned: false,
+  };
+
+  if (scope === "threads" || scope === "both") {
+    payload.threadRestrictedUntil = until;
+  } else {
+    payload.threadRestrictedUntil = deleteField();
+  }
+
+  if (scope === "comments" || scope === "both") {
+    payload.commentRestrictedUntil = until;
+  } else {
+    payload.commentRestrictedUntil = deleteField();
+  }
+
+  if (reason) {
+    payload.reason = reason;
+  } else {
+    payload.reason = deleteField();
+  }
+
+  state.isSavingBan = true;
+  renderModerationPanel();
+
+  try {
+    await setDoc(doc(db, USER_ROLES_COLLECTION, targetUid), payload, {
+      merge: true,
+    });
+
+    setBanFeedback("Restricția de publicare a fost aplicată.", "success");
+  } catch (error) {
+    setBanFeedback(
+      describeError(error, "Nu am putut aplica restricția."),
+      "error",
+    );
+  } finally {
+    state.isSavingBan = false;
+    renderModerationPanel();
+  }
+};
+
+const clearPostingRestriction = async () => {
+  if (!state.authUser || !state.isModerator || state.isSavingBan) return;
+  const targetUid = getBanTargetUid();
+  if (!targetUid) {
+    setBanFeedback(
+      "Selectează utilizatorul pentru care vrei să elimini restricțiile.",
+      "error",
+    );
+    return;
+  }
+
+  state.isSavingBan = true;
+  renderModerationPanel();
+
+  try {
+    await setDoc(
+      doc(db, USER_ROLES_COLLECTION, targetUid),
+      {
+        isBanned: false,
+        threadRestrictedUntil: deleteField(),
+        commentRestrictedUntil: deleteField(),
+        threadCooldownUntil: deleteField(),
+        commentCooldownUntil: deleteField(),
+        reason: deleteField(),
+        updatedAt: serverTimestamp(),
+        updatedByUid: state.authUser.uid,
+      },
+      { merge: true },
+    );
+
+    setBanFeedback("Restricțiile de publicare au fost eliminate.", "success");
+  } catch (error) {
+    setBanFeedback(
+      describeError(error, "Nu am putut elimina restricțiile."),
+      "error",
+    );
+  } finally {
+    state.isSavingBan = false;
+    renderModerationPanel();
+  }
+};
+
+const toggleReplyVisibility = async (replyId) => {
+  const reply = state.replies.find((item) => item.id === replyId);
+  if (!reply) return;
+
+  if (!canToggleReplyModeration(reply)) {
+    setReplyFeedback("Nu ai permisiunea de a modera acest răspuns.", "error");
+    return;
+  }
+
+  const nextStatus = reply.moderationStatus === "hidden" ? "visible" : "hidden";
+
+  try {
+    await updateDoc(
+      doc(
+        db,
+        THREADS_COLLECTION,
+        state.thread.id,
+        THREAD_REPLIES_COLLECTION,
+        replyId,
+      ),
+      {
+        moderationStatus: nextStatus,
+        updatedAt: serverTimestamp(),
+      },
+    );
+
+    setReplyFeedback(
+      nextStatus === "visible" ?
+        "Răspunsul este vizibil."
+      : "Răspunsul a fost ascuns.",
+      "success",
+    );
+    await loadReplies({ reset: true });
+  } catch (error) {
+    setReplyFeedback(
+      describeError(error, "Nu am putut actualiza statusul răspunsului."),
+      "error",
+    );
+  }
+};
+
+const setBanTargetUid = (uid) => {
+  const normalizedUid = toTrimmedString(uid);
+  if (!normalizedUid) return;
+
+  if (refs.banTargetUser) {
+    const hasOption = [...refs.banTargetUser.options].some(
+      (option) => option.value === normalizedUid,
+    );
+    refs.banTargetUser.value = hasOption ? normalizedUid : "";
+    if (refs.banTargetUid) {
+      refs.banTargetUid.value = hasOption ? "" : normalizedUid;
+    }
+  } else if (refs.banTargetUid) {
+    refs.banTargetUid.value = normalizedUid;
+  }
+
+  renderBanTargetSummary();
+  if (refs.threadToolsDetails) refs.threadToolsDetails.open = true;
+  if (refs.banTargetUser) {
+    refs.banTargetUser.focus();
+    return;
+  }
+  refs.banTargetUid?.focus();
 };
 
 const handleRepliesListClick = async (event) => {
@@ -1448,11 +2387,11 @@ const handleRepliesListClick = async (event) => {
 
   const action = actionTrigger.getAttribute("data-action") || "";
   const replyId = toTrimmedString(actionTrigger.getAttribute("data-reply-id"));
-  if (!replyId) return;
 
   if (action === "start-edit") {
+    if (!replyId) return;
     const reply = state.replies.find((item) => item.id === replyId);
-    if (!reply || !canManageReply(reply)) return;
+    if (!reply || !canEditReply(reply)) return;
 
     state.editingReplyId = replyId;
     state.editingReplyValue = reply.body;
@@ -1468,7 +2407,23 @@ const handleRepliesListClick = async (event) => {
   }
 
   if (action === "delete-reply") {
+    if (!replyId) return;
     await deleteReply(replyId);
+    return;
+  }
+
+  if (action === "toggle-reply-visibility") {
+    if (!replyId) return;
+    await toggleReplyVisibility(replyId);
+    return;
+  }
+
+  if (action === "ban-reply-author") {
+    const authorUid = toTrimmedString(
+      actionTrigger.getAttribute("data-reply-author-uid"),
+    );
+    if (!authorUid) return;
+    setBanTargetUid(authorUid);
   }
 };
 
@@ -1529,20 +2484,44 @@ const bindEvents = () => {
     await bootstrapPage({ refreshCategories: true });
   });
 
-  refs.replyStartBtn?.addEventListener("click", () => {
-    if (!state.authUser) {
-      redirectToLogin();
-      return;
-    }
+  refs.replyComposeTrigger?.addEventListener("click", () => {
+    openReplyComposer();
+  });
 
-    refs.replyInput?.focus();
-    refs.replyInput?.scrollIntoView({ behavior: "smooth", block: "center" });
+  refs.replyCancelBtn?.addEventListener("click", () => {
+    setReplyFeedback("");
+    collapseReplyComposer({ clearDraft: true });
   });
 
   refs.replyForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     await submitNewReply();
   });
+
+  refs.replyInput?.addEventListener("input", () => {
+    renderReplyCharacterCounter();
+    autoResizeReplyInput();
+  });
+
+  refs.replyInput?.addEventListener("focus", () => {
+    autoResizeReplyInput();
+  });
+
+  refs.replyInput?.addEventListener("blur", () => {
+    autoResizeReplyInput();
+  });
+
+  refs.repliesSortSelect?.addEventListener("change", () => {
+    const nextSort =
+      refs.repliesSortSelect?.value === "oldest" ? "oldest" : "newest";
+    if (nextSort === state.repliesSort) return;
+    state.repliesSort = nextSort;
+    renderReplies();
+  });
+  bindSelectShell(
+    refs.repliesSortSelect?.closest(".forum-select-shell"),
+    refs.repliesSortSelect,
+  );
 
   refs.repliesLoadMore?.addEventListener("click", async () => {
     refs.repliesLoadMore.disabled = true;
@@ -1563,6 +2542,52 @@ const bindEvents = () => {
     event.preventDefault();
     await submitModerationUpdate();
   });
+
+  refs.ownerForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await submitOwnerThreadEdit();
+  });
+
+  refs.modDelete?.addEventListener("click", async () => {
+    await deleteThreadWithModeration();
+  });
+
+  refs.banForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await applyPostingRestriction();
+  });
+
+  refs.banUseThreadAuthor?.addEventListener("click", () => {
+    setBanTargetUid(state.thread?.authorUid || "");
+  });
+
+  refs.banTargetUser?.addEventListener("change", () => {
+    const selectedUid = toTrimmedString(refs.banTargetUser?.value);
+    if (selectedUid && refs.banTargetUid) {
+      refs.banTargetUid.value = "";
+    }
+    renderBanTargetSummary();
+  });
+
+  refs.banTargetUid?.addEventListener("input", () => {
+    const manualUid = toTrimmedString(refs.banTargetUid?.value);
+    if (refs.banTargetUser) {
+      const hasOption = [...refs.banTargetUser.options].some(
+        (option) => option.value === manualUid,
+      );
+      refs.banTargetUser.value = hasOption ? manualUid : "";
+    }
+    renderBanTargetSummary();
+  });
+
+  refs.banClear?.addEventListener("click", async () => {
+    await clearPostingRestriction();
+  });
+
+  window.addEventListener("scroll", updateBackToTopVisibility, {
+    passive: true,
+  });
+  refs.backToTopBtn?.addEventListener("click", onBackToTopClick);
 };
 
 const bootstrapPage = async ({ refreshCategories = false } = {}) => {
@@ -1587,15 +2612,21 @@ const bootstrapPage = async ({ refreshCategories = false } = {}) => {
   renderReplyComposer();
   renderModerationPanel();
   setReplyFeedback("");
+  setOwnerFeedback("");
   setModerationFeedback("");
+  setBanFeedback("");
 
   await loadReplies({ reset: true });
 };
 
 const init = async () => {
   state.routeThreadId = parseThreadRoute().resolvedThreadId;
+  if (refs.repliesSortSelect?.value === "oldest") {
+    state.repliesSort = "oldest";
+  }
 
   bindEvents();
+  updateBackToTopVisibility();
 
   try {
     const initialUser = await waitForInitialAuth();

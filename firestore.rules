@@ -179,6 +179,54 @@ service cloud.firestore {
         && canReadModeratedDoc(threadDoc(threadId).data);
     }
 
+    function userIsBanned(uid) {
+      return roleExists(uid)
+        && ('isBanned' in roleDoc(uid).data)
+        && roleDoc(uid).data.isBanned == true;
+    }
+
+    function hasActiveThreadRestriction(uid) {
+      return roleExists(uid)
+        && (
+          (
+            ('threadRestrictedUntil' in roleDoc(uid).data)
+            && roleDoc(uid).data.threadRestrictedUntil is timestamp
+            && roleDoc(uid).data.threadRestrictedUntil > request.time
+          )
+          || (
+            ('threadCooldownUntil' in roleDoc(uid).data)
+            && roleDoc(uid).data.threadCooldownUntil is timestamp
+            && roleDoc(uid).data.threadCooldownUntil > request.time
+          )
+        );
+    }
+
+    function hasActiveCommentRestriction(uid) {
+      return roleExists(uid)
+        && (
+          (
+            ('commentRestrictedUntil' in roleDoc(uid).data)
+            && roleDoc(uid).data.commentRestrictedUntil is timestamp
+            && roleDoc(uid).data.commentRestrictedUntil > request.time
+          )
+          || (
+            ('commentCooldownUntil' in roleDoc(uid).data)
+            && roleDoc(uid).data.commentCooldownUntil is timestamp
+            && roleDoc(uid).data.commentCooldownUntil > request.time
+          )
+        );
+    }
+
+    function canCreateThreadByUser(uid) {
+      return !userIsBanned(uid)
+        && !hasActiveThreadRestriction(uid);
+    }
+
+    function canCreateCommentByUser(uid) {
+      return !userIsBanned(uid)
+        && !hasActiveCommentRestriction(uid);
+    }
+
     function authorEmailMatchesAuthToken(emailValue) {
       return !('email' in request.auth.token)
         || !(request.auth.token.email is string)
@@ -340,8 +388,6 @@ service cloud.firestore {
 
     function validForumThreadUpdateByAdmin() {
       return request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'title',
-          'body',
           'categoryId',
           'categoryType',
           'isSticky',
@@ -351,7 +397,6 @@ service cloud.firestore {
           'updatedAt',
           'lastActivityAt'
         ])
-        && validThreadTextFields()
         && validThreadCategoryFields()
         && request.resource.data.isSticky is bool
         && request.resource.data.isLocked is bool
@@ -365,18 +410,14 @@ service cloud.firestore {
 
     function validForumThreadUpdateByModerator() {
       return request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'title',
-          'body',
-          'categoryId',
-          'categoryType',
           'isLocked',
           'moderationStatus',
           'commentCount',
           'updatedAt',
           'lastActivityAt'
         ])
-        && validThreadTextFields()
-        && validThreadCategoryFields()
+        && request.resource.data.categoryId == resource.data.categoryId
+        && request.resource.data.categoryType == resource.data.categoryType
         && request.resource.data.isSticky == resource.data.isSticky
         && request.resource.data.isLocked is bool
         && validModerationStatus(request.resource.data.moderationStatus)
@@ -460,11 +501,9 @@ service cloud.firestore {
 
     function validForumCommentUpdateByModerator() {
       return request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'body',
           'moderationStatus',
           'updatedAt'
         ])
-        && validCommentBodyField()
         && validModerationStatus(request.resource.data.moderationStatus)
         && request.resource.data.updatedAt == request.time
         && commentIdentityUnchanged();
@@ -493,6 +532,60 @@ service cloud.firestore {
           || (request.resource.data.reputation is number
             && request.resource.data.reputation >= 0
             && request.resource.data.reputation <= 1000000))
+        && (!('isBanned' in request.resource.data)
+          || request.resource.data.isBanned is bool)
+        && (!('threadRestrictedUntil' in request.resource.data)
+          || request.resource.data.threadRestrictedUntil is timestamp)
+        && (!('commentRestrictedUntil' in request.resource.data)
+          || request.resource.data.commentRestrictedUntil is timestamp)
+        && (!('threadCooldownUntil' in request.resource.data)
+          || request.resource.data.threadCooldownUntil is timestamp)
+        && (!('commentCooldownUntil' in request.resource.data)
+          || request.resource.data.commentCooldownUntil is timestamp)
+        && (!('reason' in request.resource.data)
+          || isOptionalStringMax(request.resource.data.reason, 300))
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+    }
+
+    function validForumRoleModerationCreatePayload() {
+      return request.resource.data.keys().hasOnly([
+          'isBanned',
+          'threadRestrictedUntil',
+          'commentRestrictedUntil',
+          'threadCooldownUntil',
+          'commentCooldownUntil',
+          'reason',
+          'updatedAt',
+          'updatedByUid'
+        ])
+        && (!('isBanned' in request.resource.data)
+          || request.resource.data.isBanned is bool)
+        && (!('threadRestrictedUntil' in request.resource.data)
+          || request.resource.data.threadRestrictedUntil is timestamp)
+        && (!('commentRestrictedUntil' in request.resource.data)
+          || request.resource.data.commentRestrictedUntil is timestamp)
+        && (!('threadCooldownUntil' in request.resource.data)
+          || request.resource.data.threadCooldownUntil is timestamp)
+        && (!('commentCooldownUntil' in request.resource.data)
+          || request.resource.data.commentCooldownUntil is timestamp)
+        && (!('reason' in request.resource.data)
+          || isOptionalStringMax(request.resource.data.reason, 300))
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedByUid == request.auth.uid;
+    }
+
+    function validForumRoleModerationUpdatePayload() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'isBanned',
+          'threadRestrictedUntil',
+          'commentRestrictedUntil',
+          'threadCooldownUntil',
+          'commentCooldownUntil',
+          'reason',
+          'updatedAt',
+          'updatedByUid'
+        ])
         && (!('isBanned' in request.resource.data)
           || request.resource.data.isBanned is bool)
         && (!('threadRestrictedUntil' in request.resource.data)
@@ -584,6 +677,7 @@ service cloud.firestore {
       allow read: if canReadModeratedDoc(resource.data);
 
       allow create: if isSignedIn()
+        && canCreateThreadByUser(request.auth.uid)
         && validForumThreadCreatePayload()
         && (
           request.resource.data.categoryType == 'normal'
@@ -615,6 +709,7 @@ service cloud.firestore {
           );
 
         allow create: if isSignedIn()
+          && canCreateCommentByUser(request.auth.uid)
           && threadCanReceiveComments(threadId)
           && validForumCommentPayload();
 
@@ -631,7 +726,16 @@ service cloud.firestore {
 
     match /forumUserRoles/{uid} {
       allow read: if hasAdminClaim() || isSelf(uid);
-      allow create, update: if hasAdminClaim() && validForumRolePayload();
+      allow create: if (
+          isAdmin() && validForumRolePayload()
+        ) || (
+          isModerator() && validForumRoleModerationCreatePayload()
+        );
+      allow update: if (
+          isAdmin() && validForumRolePayload()
+        ) || (
+          isModerator() && validForumRoleModerationUpdatePayload()
+        );
       allow delete: if hasAdminClaim();
     }
 
