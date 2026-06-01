@@ -29,6 +29,10 @@ const AUTH_RETURN_KEY = "authReturnTo";
 const PUBLIC_ORIGIN = "https://educheia.md";
 const REPLIES_PAGE_SIZE = 12;
 const AUTH_RESOLVE_TIMEOUT_MS = 1800;
+const BACK_TO_TOP_FADE_MS = 180;
+const ROBOTS_INDEX_DIRECTIVE =
+  "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1";
+const ROBOTS_NOINDEX_DIRECTIVE = "noindex,nofollow,noarchive";
 
 const VALID_FORUM_ROLES = new Set(["member", "moderator", "admin"]);
 const VALID_MODERATION_STATUSES = new Set(["visible", "pending", "hidden"]);
@@ -61,6 +65,8 @@ const state = {
   editingReplyValue: "",
   replyComposerExpanded: false,
   authSignature: "guest",
+  backToTopHideTimeoutId: 0,
+  revealedReplyIds: new Set(),
 };
 
 const refs = {
@@ -137,12 +143,18 @@ const refs = {
   sidebarParticipants: document.getElementById("sidebar-participants"),
 
   metaDescription: document.getElementById("thread-meta-description"),
+  metaRobots: document.getElementById("thread-meta-robots"),
   ogTitle: document.getElementById("thread-og-title"),
   ogDescription: document.getElementById("thread-og-description"),
   ogUrl: document.getElementById("thread-og-url"),
+  ogUpdatedTime: document.getElementById("thread-og-updated-time"),
+  articlePublishedTime: document.getElementById("thread-article-published-time"),
+  articleModifiedTime: document.getElementById("thread-article-modified-time"),
   twitterTitle: document.getElementById("thread-twitter-title"),
   twitterDescription: document.getElementById("thread-twitter-description"),
+  twitterUrl: document.getElementById("thread-twitter-url"),
   canonicalLink: document.getElementById("thread-canonical-link"),
+  structuredData: document.getElementById("thread-structured-data"),
 };
 
 const toTrimmedString = (value) =>
@@ -263,6 +275,26 @@ const formatAbsoluteTime = (rawDate) => {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+};
+
+const toIsoDateTime = (rawDate) => {
+  const date = toDateOrNull(rawDate);
+  if (!date) return "";
+
+  try {
+    return date.toISOString();
+  } catch {
+    return "";
+  }
+};
+
+const truncateText = (value, maxLength = 160) => {
+  const normalized = toTrimmedString(value);
+  if (!normalized) return "";
+  if (normalized.length <= maxLength) return normalized;
+
+  const sliced = normalized.slice(0, maxLength - 1).trimEnd();
+  return `${sliced}…`;
 };
 
 const formatCompactUid = (uid) => {
@@ -520,12 +552,38 @@ const bindSelectShell = (shellElement, selectElement) => {
   });
 };
 
+const clearBackToTopHideTimeout = () => {
+  if (!state.backToTopHideTimeoutId) return;
+  window.clearTimeout(state.backToTopHideTimeoutId);
+  state.backToTopHideTimeoutId = 0;
+};
+
 const updateBackToTopVisibility = () => {
   if (!refs.backToTopBtn) return;
 
   const shouldShow = window.scrollY > 720;
-  refs.backToTopBtn.hidden = !shouldShow;
-  refs.backToTopBtn.classList.toggle("is-visible", shouldShow);
+  clearBackToTopHideTimeout();
+
+  if (shouldShow) {
+    refs.backToTopBtn.hidden = false;
+    window.requestAnimationFrame(() => {
+      refs.backToTopBtn?.classList.add("is-visible");
+    });
+    return;
+  }
+
+  refs.backToTopBtn.classList.remove("is-visible");
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    refs.backToTopBtn.hidden = true;
+    return;
+  }
+
+  state.backToTopHideTimeoutId = window.setTimeout(() => {
+    if (window.scrollY > 720) return;
+    refs.backToTopBtn.hidden = true;
+    state.backToTopHideTimeoutId = 0;
+  }, BACK_TO_TOP_FADE_MS);
 };
 
 const onBackToTopClick = () => {
@@ -533,6 +591,14 @@ const onBackToTopClick = () => {
     top: 0,
     behavior: "smooth",
   });
+};
+
+const safeDecodeURIComponent = (value) => {
+  try {
+    return decodeURIComponent(String(value || ""));
+  } catch {
+    return String(value || "");
+  }
 };
 
 const parseThreadRoute = () => {
@@ -545,7 +611,7 @@ const parseThreadRoute = () => {
 
   const pathThreadId =
     hasPathThreadRoute && pathnameSegments.length >= 3 ?
-      decodeURIComponent(pathnameSegments[2] || "").trim()
+      safeDecodeURIComponent(pathnameSegments[2] || "").trim()
     : "";
 
   const params = new URLSearchParams(window.location.search);
@@ -621,6 +687,88 @@ const setRepliesStatus = (text = "") => {
   refs.repliesStatus.textContent = text;
 };
 
+const setRobotsDirective = (value) => {
+  if (!refs.metaRobots) return;
+  refs.metaRobots.setAttribute("content", value || ROBOTS_NOINDEX_DIRECTIVE);
+};
+
+const clearStructuredData = () => {
+  if (!refs.structuredData) return;
+  refs.structuredData.textContent = "{}";
+};
+
+const updateThreadStructuredData = ({
+  thread,
+  canonicalUrl,
+  description,
+  publishedIso,
+  modifiedIso,
+} = {}) => {
+  if (!refs.structuredData || !thread || !canonicalUrl) {
+    clearStructuredData();
+    return;
+  }
+
+  const structuredDataPayload = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "DiscussionForumPosting",
+        "@id": `${canonicalUrl}#discussion`,
+        url: canonicalUrl,
+        headline: toTrimmedString(thread.title) || "Subiect Forum Educheia",
+        articleBody: truncateText(thread.body, 4000),
+        description,
+        datePublished: publishedIso || undefined,
+        dateModified: modifiedIso || publishedIso || undefined,
+        interactionStatistic: {
+          "@type": "InteractionCounter",
+          interactionType: "https://schema.org/CommentAction",
+          userInteractionCount: safeInt(thread.commentCount, 0),
+        },
+        author: {
+          "@type": "Person",
+          name: toTrimmedString(thread.authorName) || "Membru Educheia",
+        },
+        isPartOf: {
+          "@id": `${PUBLIC_ORIGIN}/forum#collection-page`,
+        },
+        mainEntityOfPage: canonicalUrl,
+        publisher: {
+          "@type": "Organization",
+          name: "Educheia",
+          url: PUBLIC_ORIGIN,
+        },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Acasă",
+            item: `${PUBLIC_ORIGIN}/`,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: "Forum",
+            item: `${PUBLIC_ORIGIN}/forum`,
+          },
+          {
+            "@type": "ListItem",
+            position: 3,
+            name: toTrimmedString(thread.title) || "Subiect forum",
+            item: canonicalUrl,
+          },
+        ],
+      },
+    ],
+  };
+
+  refs.structuredData.textContent = JSON.stringify(structuredDataPayload);
+};
+
 const showViewState = (view) => {
   const showLoading = view === "loading";
   const showNotFound = view === "not-found";
@@ -633,6 +781,11 @@ const showViewState = (view) => {
   if (refs.stateDenied) refs.stateDenied.hidden = !showDenied;
   if (refs.stateError) refs.stateError.hidden = !showError;
   if (refs.threadContent) refs.threadContent.hidden = !showContent;
+
+  if (!showContent) {
+    setRobotsDirective(ROBOTS_NOINDEX_DIRECTIVE);
+    clearStructuredData();
+  }
 };
 
 const getThreadRef = () => {
@@ -683,10 +836,14 @@ const canToggleReplyModeration = (reply) => {
 const updateMetaTags = (thread, canonicalPath) => {
   const title = toTrimmedString(thread?.title) || "Subiect Forum";
   const body = toTrimmedString(thread?.body);
-  const description =
-    body ?
-      body.slice(0, 160)
-    : "Discuție individuală din comunitatea Educheia.";
+  const description = truncateText(
+    body || "Discuție individuală din comunitatea Educheia.",
+    160,
+  );
+  const publishedIso = toIsoDateTime(thread?.createdAt);
+  const modifiedIso =
+    toIsoDateTime(thread?.updatedAt) || toIsoDateTime(thread?.lastActivityAt);
+  const isIndexableThread = toTrimmedString(thread?.moderationStatus) === "visible";
 
   document.title = `${title} | Forum Educheia`;
 
@@ -703,6 +860,24 @@ const updateMetaTags = (thread, canonicalPath) => {
 
   if (refs.canonicalLink) refs.canonicalLink.setAttribute("href", canonicalUrl);
   if (refs.ogUrl) refs.ogUrl.setAttribute("content", canonicalUrl);
+  if (refs.twitterUrl) refs.twitterUrl.setAttribute("content", canonicalUrl);
+  if (refs.ogUpdatedTime)
+    refs.ogUpdatedTime.setAttribute("content", modifiedIso || publishedIso);
+  if (refs.articlePublishedTime)
+    refs.articlePublishedTime.setAttribute("content", publishedIso);
+  if (refs.articleModifiedTime)
+    refs.articleModifiedTime.setAttribute("content", modifiedIso || publishedIso);
+
+  setRobotsDirective(
+    isIndexableThread ? ROBOTS_INDEX_DIRECTIVE : ROBOTS_NOINDEX_DIRECTIVE,
+  );
+  updateThreadStructuredData({
+    thread,
+    canonicalUrl,
+    description,
+    publishedIso,
+    modifiedIso,
+  });
 };
 
 const mapCategoryDoc = (docSnap) => {
@@ -1083,20 +1258,35 @@ const renderThreadSummary = () => {
   if (refs.threadSummaryTitle) {
     refs.threadSummaryTitle.textContent = state.thread.title;
   }
-  refs.threadBody.textContent =
-    state.thread.body || "Nu există conținut text pentru acest subiect.";
-  refs.threadAuthorName.textContent = state.thread.authorName;
-  refs.threadAuthorAvatar.textContent = extractInitials(
-    state.thread.authorName,
-  );
-  refs.threadCreatedAt.textContent = formatRelativeTime(state.thread.createdAt);
-  refs.threadCategory.textContent = getThreadCategoryLabel(state.thread);
-  refs.threadRepliesCount.textContent = String(
-    safeInt(state.thread.commentCount, 0),
-  );
+  if (refs.threadBody) {
+    refs.threadBody.textContent =
+      state.thread.body || "Nu există conținut text pentru acest subiect.";
+  }
+  if (refs.threadAuthorName) {
+    refs.threadAuthorName.textContent = state.thread.authorName;
+  }
+  if (refs.threadAuthorAvatar) {
+    refs.threadAuthorAvatar.textContent = extractInitials(
+      state.thread.authorName,
+    );
+  }
+  if (refs.threadCreatedAt) {
+    refs.threadCreatedAt.textContent = formatRelativeTime(state.thread.createdAt);
+  }
+  if (refs.threadCategory) {
+    refs.threadCategory.textContent = getThreadCategoryLabel(state.thread);
+  }
+  if (refs.threadRepliesCount) {
+    refs.threadRepliesCount.textContent = String(
+      safeInt(state.thread.commentCount, 0),
+    );
+  }
 
   const activityDate = state.thread.lastActivityAt || state.thread.createdAt;
-  refs.threadLastActivity.textContent = `Ultima activitate: ${formatRelativeTime(activityDate)} (${formatAbsoluteTime(activityDate)})`;
+  if (refs.threadLastActivity) {
+    refs.threadLastActivity.textContent =
+      `Ultima activitate: ${formatRelativeTime(activityDate)} (${formatAbsoluteTime(activityDate)})`;
+  }
 
   renderThreadBadges();
   rebuildModerationTargets();
@@ -1165,8 +1355,16 @@ const renderReplyComposer = () => {
   if (!isSignedIn) {
     refs.replyComposeTrigger.textContent = "Conectează-te pentru a comenta";
     refs.replyInput.placeholder = "Autentifică-te pentru a răspunde.";
-    refs.replyAuthNote.innerHTML =
-      'Trebuie să fii autentificat pentru a răspunde. <a href="/login" class="forum-inline-link">Login</a>';
+
+    clearNode(refs.replyAuthNote);
+    refs.replyAuthNote.append("Trebuie să fii autentificat pentru a răspunde. ");
+
+    const loginLink = document.createElement("a");
+    loginLink.href = "/login";
+    loginLink.className = "forum-inline-link";
+    loginLink.textContent = "Login";
+    refs.replyAuthNote.appendChild(loginLink);
+
     autoResizeReplyInput();
     return;
   }
@@ -1231,9 +1429,19 @@ const renderReplies = () => {
 
   const fragment = document.createDocumentFragment();
 
-  replies.forEach((reply) => {
+  replies.forEach((reply, index) => {
+    const replyKey = toTrimmedString(reply?.id);
+    const shouldReveal = Boolean(replyKey) && !state.revealedReplyIds.has(replyKey);
+    if (replyKey) {
+      state.revealedReplyIds.add(replyKey);
+    }
+
     const article = document.createElement("article");
-    article.className = "forum-reply-card";
+    article.className =
+      shouldReveal ? "forum-reply-card forum-reveal-item" : "forum-reply-card";
+    if (shouldReveal) {
+      article.style.setProperty("--forum-reveal-index", String(index));
+    }
     article.setAttribute("role", "listitem");
 
     const head = document.createElement("div");
@@ -1260,6 +1468,11 @@ const renderReplies = () => {
     const time = document.createElement("time");
     time.className = "forum-reply-time";
     time.textContent = formatRelativeTime(reply.createdAt);
+    const replyDate = toDateOrNull(reply.createdAt);
+    if (replyDate) {
+      time.dateTime = replyDate.toISOString();
+      time.title = formatAbsoluteTime(replyDate);
+    }
 
     topRow.append(authorName, time);
 
@@ -1538,7 +1751,8 @@ const buildRepliesQuery = () => {
     constraints.push(where("moderationStatus", "==", "visible"));
   }
 
-  constraints.push(orderBy("createdAt", "desc"));
+  const direction = state.repliesSort === "oldest" ? "asc" : "desc";
+  constraints.push(orderBy("createdAt", direction));
 
   if (state.repliesCursor) {
     constraints.push(startAfter(state.repliesCursor));
@@ -1640,7 +1854,7 @@ const loadReplies = async ({ reset = false } = {}) => {
         state.hasMoreReplies = false;
         state.repliesUsingIndexFallback = true;
 
-        refs.repliesLoadMore.hidden = true;
+        if (refs.repliesLoadMore) refs.repliesLoadMore.hidden = true;
         renderReplies();
         setRepliesStatus(
           "Răspunsurile au fost încărcate în mod compatibil. Creează indexul recomandat pentru paginare completă.",
@@ -1651,15 +1865,17 @@ const loadReplies = async ({ reset = false } = {}) => {
       }
     }
 
-    refs.repliesLoadMore.hidden = true;
+    if (refs.repliesLoadMore) refs.repliesLoadMore.hidden = true;
     setRepliesStatus(describeError(error, "Nu am putut încărca răspunsurile."));
   } finally {
     if (requestId === state.repliesRequestId) {
       state.isLoadingReplies = false;
       showRepliesLoading(false);
 
-      refs.repliesLoadMore.disabled = false;
-      refs.repliesLoadMore.textContent = "Încarcă mai multe";
+      if (refs.repliesLoadMore) {
+        refs.repliesLoadMore.disabled = false;
+        refs.repliesLoadMore.textContent = "Încarcă mai multe";
+      }
     }
   }
 };
@@ -1690,6 +1906,7 @@ const refreshThreadDocument = async () => {
 
 const loadThread = async () => {
   state.thread = null;
+  state.revealedReplyIds.clear();
 
   if (!state.routeThreadId) {
     showViewState("not-found");
@@ -2511,12 +2728,15 @@ const bindEvents = () => {
     autoResizeReplyInput();
   });
 
-  refs.repliesSortSelect?.addEventListener("change", () => {
+  refs.repliesSortSelect?.addEventListener("change", async () => {
     const nextSort =
       refs.repliesSortSelect?.value === "oldest" ? "oldest" : "newest";
     if (nextSort === state.repliesSort) return;
     state.repliesSort = nextSort;
+    state.editingReplyId = "";
+    state.editingReplyValue = "";
     renderReplies();
+    await loadReplies({ reset: true });
   });
   bindSelectShell(
     refs.repliesSortSelect?.closest(".forum-select-shell"),
@@ -2627,6 +2847,9 @@ const init = async () => {
 
   bindEvents();
   updateBackToTopVisibility();
+  window.addEventListener("pagehide", () => {
+    clearBackToTopHideTimeout();
+  });
 
   try {
     const initialUser = await waitForInitialAuth();

@@ -23,6 +23,7 @@ const MAX_VISIBLE_CATEGORY_CHIPS = 6;
 const FEED_AUTOLOAD_MARGIN_PX = 240;
 const FEED_AUTOLOAD_DELAY_MS = 160;
 const MODAL_TRANSITION_MS = 220;
+const BACK_TO_TOP_FADE_MS = 180;
 const THREADS_COLLECTION = "forumThreads";
 const CATEGORIES_COLLECTION = "forumCategories";
 const USER_ROLES_COLLECTION = "forumUserRoles";
@@ -77,7 +78,12 @@ const state = {
   isSubmittingThread: false,
   isModalOpen: false,
   modalCloseTimeoutId: 0,
+  lastModalFocusedElement: null,
   searchDebounceId: 0,
+  backToTopHideTimeoutId: 0,
+  revealedFeedThreadIds: new Set(),
+  revealedStickyThreadIds: new Set(),
+  revealedAdminThreadIds: new Set(),
 };
 
 const refs = {
@@ -609,6 +615,12 @@ const clearFeedAutoCheckTimeout = () => {
   state.feedAutoCheckTimeoutId = 0;
 };
 
+const clearBackToTopHideTimeout = () => {
+  if (!state.backToTopHideTimeoutId) return;
+  window.clearTimeout(state.backToTopHideTimeoutId);
+  state.backToTopHideTimeoutId = 0;
+};
+
 const isFeedSentinelInAutoloadRange = () => {
   if (!refs.feedSentinel || refs.feedSentinel.hidden) return false;
   const sentinelRect = refs.feedSentinel.getBoundingClientRect();
@@ -635,20 +647,53 @@ const updateBackToTopVisibility = () => {
   if (!refs.backToTopBtn) return;
 
   const shouldShow = window.scrollY > 720;
-  refs.backToTopBtn.hidden = !shouldShow;
-  refs.backToTopBtn.classList.toggle("is-visible", shouldShow);
+  clearBackToTopHideTimeout();
+
+  if (shouldShow) {
+    refs.backToTopBtn.hidden = false;
+    window.requestAnimationFrame(() => {
+      refs.backToTopBtn?.classList.add("is-visible");
+    });
+    return;
+  }
+
+  refs.backToTopBtn.classList.remove("is-visible");
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    refs.backToTopBtn.hidden = true;
+    return;
+  }
+
+  state.backToTopHideTimeoutId = window.setTimeout(() => {
+    if (window.scrollY > 720) return;
+    refs.backToTopBtn.hidden = true;
+    state.backToTopHideTimeoutId = 0;
+  }, BACK_TO_TOP_FADE_MS);
 };
 
-const renderThreadList = (listRef, threads) => {
+const renderThreadList = (listRef, threads, { revealedIds = null } = {}) => {
   clearNode(listRef);
 
   if (!threads.length) return;
 
   const fragment = document.createDocumentFragment();
 
-  threads.forEach((thread) => {
+  threads.forEach((thread, index) => {
+    const threadKey = toTrimmedString(thread?.id);
+    const shouldReveal =
+      revealedIds instanceof Set ?
+        Boolean(threadKey) && !revealedIds.has(threadKey)
+      : true;
+    if (revealedIds instanceof Set && threadKey) {
+      revealedIds.add(threadKey);
+    }
+
     const link = document.createElement("a");
-    link.className = "forum-thread-link";
+    link.className =
+      shouldReveal ? "forum-thread-link forum-reveal-item" : "forum-thread-link";
+    if (shouldReveal) {
+      link.style.setProperty("--forum-reveal-index", String(index));
+    }
     link.href = buildThreadUrl(thread);
     link.setAttribute("role", "listitem");
 
@@ -745,7 +790,9 @@ const renderStickySection = () => {
     refs.stickyEmpty.hidden = true;
   }
 
-  renderThreadList(refs.stickyList, visibleSticky);
+  renderThreadList(refs.stickyList, visibleSticky, {
+    revealedIds: state.revealedStickyThreadIds,
+  });
 };
 
 const renderFeedSection = () => {
@@ -755,7 +802,9 @@ const renderFeedSection = () => {
   const isEmpty = !state.isLoadingFeed && !hasError && !visibleFeed.length;
   refs.feedEmpty.hidden = !isEmpty;
 
-  renderThreadList(refs.feedList, visibleFeed);
+  renderThreadList(refs.feedList, visibleFeed, {
+    revealedIds: state.revealedFeedThreadIds,
+  });
 
   if (isEmpty) {
     renderFeedStatus("Niciun rezultat pentru filtrele selectate.");
@@ -994,6 +1043,7 @@ const loadFeedPage = async ({ reset = false } = {}) => {
     hideFeedError();
     refs.feedEmpty.hidden = true;
     clearNode(refs.feedList);
+    state.revealedFeedThreadIds.clear();
   }
 
   state.isLoadingFeed = true;
@@ -1267,16 +1317,17 @@ const setComposerCategoryScope = (scope, { preferredValue = null } = {}) => {
 };
 
 const updateCreateUiState = () => {
+  if (!refs.newThreadBtn) return;
+
   const restrictionMessage = describePostingRestriction(
     state.threadPostingRestriction,
     "thread-uri",
   );
   const isRestricted = Boolean(state.threadPostingRestriction);
 
-  if (refs.newThreadBtn) {
-    refs.newThreadBtn.disabled = isRestricted;
-    refs.newThreadBtn.classList.toggle("is-disabled", isRestricted);
-  }
+  refs.newThreadBtn.disabled = isRestricted;
+  refs.newThreadBtn.classList.toggle("is-disabled", isRestricted);
+  refs.newThreadBtn.setAttribute("aria-disabled", String(isRestricted));
 
   if (state.authUser) {
     refs.newThreadBtn.textContent =
@@ -1294,8 +1345,9 @@ const updateCreateUiState = () => {
     }
   } else {
     refs.newThreadBtn.textContent = "Intră pentru a publica";
-    refs.newThreadBtn.disabled = true;
-    refs.newThreadBtn.classList.add("is-disabled");
+    refs.newThreadBtn.disabled = false;
+    refs.newThreadBtn.classList.remove("is-disabled");
+    refs.newThreadBtn.setAttribute("aria-disabled", "false");
     if (refs.createHelp) {
       refs.createHelp.textContent =
         "Autentifică-te pentru a porni un subiect nou în forum.";
@@ -1353,6 +1405,7 @@ const renderAdminModerationThreads = () => {
     refs.adminThreadsLoading.hidden = true;
     refs.adminThreadsEmpty.hidden = true;
     clearNode(refs.adminThreadsList);
+    state.revealedAdminThreadIds.clear();
     setAdminThreadsFeedback("");
     return;
   }
@@ -1371,9 +1424,22 @@ const renderAdminModerationThreads = () => {
   clearNode(refs.adminThreadsList);
 
   const fragment = document.createDocumentFragment();
-  state.adminModerationThreads.forEach((thread) => {
+  state.adminModerationThreads.forEach((thread, index) => {
+    const threadKey = toTrimmedString(thread?.id);
+    const shouldReveal =
+      Boolean(threadKey) && !state.revealedAdminThreadIds.has(threadKey);
+    if (threadKey) {
+      state.revealedAdminThreadIds.add(threadKey);
+    }
+
     const article = document.createElement("article");
-    article.className = "forum-admin-thread-card";
+    article.className =
+      shouldReveal ?
+        "forum-admin-thread-card forum-reveal-item"
+      : "forum-admin-thread-card";
+    if (shouldReveal) {
+      article.style.setProperty("--forum-reveal-index", String(index));
+    }
     article.setAttribute("role", "listitem");
 
     const head = document.createElement("div");
@@ -1597,7 +1663,10 @@ const getFocusableInModal = () => {
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     ),
   ].filter(
-    (el) => !el.hasAttribute("disabled") && !el.getAttribute("aria-hidden"),
+    (el) =>
+      !el.hasAttribute("disabled") &&
+      el.getAttribute("aria-hidden") !== "true" &&
+      !el.closest("[hidden]"),
   );
 };
 
@@ -1626,7 +1695,7 @@ const setModalBodyScrollLock = (isLocked) => {
 };
 
 const closeThreadModal = () => {
-  if (!state.isModalOpen) return;
+  if (!state.isModalOpen || !refs.modal) return;
 
   state.isModalOpen = false;
   refs.modal.setAttribute("aria-hidden", "true");
@@ -1639,7 +1708,12 @@ const closeThreadModal = () => {
     refs.modal.hidden = true;
     refs.modal.classList.remove("is-closing");
     state.modalCloseTimeoutId = 0;
-    refs.newThreadBtn.focus();
+    const focusTarget =
+      state.lastModalFocusedElement instanceof HTMLElement ?
+        state.lastModalFocusedElement
+      : refs.newThreadBtn;
+    state.lastModalFocusedElement = null;
+    focusTarget?.focus();
   };
 
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -1654,6 +1728,15 @@ const closeThreadModal = () => {
 };
 
 const openThreadModal = () => {
+  if (
+    !refs.modal ||
+    !refs.threadTitle ||
+    !refs.threadIsSticky ||
+    !refs.threadCategory
+  ) {
+    return;
+  }
+
   if (!state.authUser) {
     const returnTarget = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     try {
@@ -1683,6 +1766,8 @@ const openThreadModal = () => {
 
   clearModalCloseTimeout();
   state.isModalOpen = true;
+  state.lastModalFocusedElement =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
   refs.modal.hidden = false;
   refs.modal.setAttribute("aria-hidden", "false");
   refs.modal.classList.remove("is-closing");
@@ -2062,6 +2147,7 @@ const onAdminThreadFilterClick = async (event) => {
   }
 
   state.adminModerationStatus = status;
+  state.revealedAdminThreadIds.clear();
   renderAdminThreadFilterChips();
   if (!refs.adminModerationPanel?.open) return;
   await loadAdminModerationThreads();
@@ -2093,7 +2179,7 @@ const onAdminThreadsListClick = async (event) => {
 };
 
 const onThreadCategoryChange = () => {
-  if (!state.isAdmin) return;
+  if (!state.isAdmin || !refs.threadCategory || !refs.threadIsSticky) return;
 
   if (state.composerCategoryScope !== "all") {
     updateThreadStickyModeState();
@@ -2187,6 +2273,8 @@ const bindSelectShell = (shellElement, selectElement) => {
 };
 
 const onSortChange = async () => {
+  if (!refs.sortSelect) return;
+
   const nextSort = refs.sortSelect.value;
   if (!SORT_CONFIG[nextSort]) return;
   if (nextSort === state.activeSort) return;
@@ -2296,6 +2384,19 @@ const initAuth = () => {
 };
 
 const bindEvents = () => {
+  if (
+    !refs.newThreadBtn ||
+    !refs.feedRetryBtn ||
+    !refs.sortSelect ||
+    !refs.categoryChips ||
+    !refs.threadCategory ||
+    !refs.modal ||
+    !refs.modalClose ||
+    !refs.threadForm
+  ) {
+    return false;
+  }
+
   refs.newThreadBtn.addEventListener("click", openThreadModal);
 
   refs.feedRetryBtn.addEventListener("click", async () => {
@@ -2350,13 +2451,32 @@ const bindEvents = () => {
     event.preventDefault();
     await submitAdminCategory();
   });
+
+  return true;
 };
 
 const init = async () => {
-  bindEvents();
+  const eventsBound = bindEvents();
+  if (!eventsBound) {
+    showFeedError(
+      "Interfața forumului nu a putut fi inițializată complet. Reîncarcă pagina.",
+    );
+    return;
+  }
+
   initAuth();
   initFeedInfiniteScroll();
   updateBackToTopVisibility();
+
+  window.addEventListener("pagehide", () => {
+    clearFeedAutoCheckTimeout();
+    clearModalCloseTimeout();
+    clearBackToTopHideTimeout();
+    window.clearTimeout(state.searchDebounceId);
+    state.searchDebounceId = 0;
+    feedObserver?.disconnect();
+    feedObserver = null;
+  });
 
   if (refs.sortSelect && SORT_CONFIG[refs.sortSelect.value]) {
     state.activeSort = refs.sortSelect.value;
