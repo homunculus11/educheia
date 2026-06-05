@@ -1,648 +1,1032 @@
-@import 'tailwindcss/base';
-@import 'tailwindcss/components';
-@import 'tailwindcss/utilities';
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 
 /* Base & Typography */
 body {
-    @apply bg-bg-main text-text-main font-sans overflow-x-hidden;
-    background: radial-gradient(circle at 12% 10%, rgba(109, 186, 198, 0.14), transparent 36%),
-        radial-gradient(circle at 90% 8%, rgba(120, 114, 184, 0.14), transparent 30%),   
-        linear-gradient(180deg, #0f1524 0%, #0f1524 100%);
-    scrollbar-width: none; /* Firefox */
+  @apply bg-bg-main text-text-main font-sans overflow-x-hidden;
+  background:
+    radial-gradient(
+      circle at 12% 10%,
+      rgba(109, 186, 198, 0.14),
+      transparent 36%
+    ),
+    radial-gradient(
+      circle at 90% 8%,
+      rgba(120, 114, 184, 0.14),
+      transparent 30%
+    ),
+    linear-gradient(180deg, #0f1524 0%, #0f1524 100%);
+  scrollbar-width: none; /* Firefox */
 }
 
 body::-webkit-scrollbar {
-    display: none; /* Chrome, Safari */
+  display: none; /* Chrome, Safari */
 }
 
 body.player-open {
-    @apply overflow-hidden;
+  @apply overflow-hidden;
 }
 
 /* Horizontal Scroll Container */
 .scroll-container {
-    @apply relative w-full;
-    height: 500vh; /* Determines the scroll length */
+  @apply relative w-full;
+  height: 500vh; /* Determines the scroll length */
 }
 
 .sticky-wrapper {
-    @apply sticky top-0 h-screen w-full overflow-hidden flex flex-col justify-center;
-    background: #0f1524; /* Solid background to prevent transparency glitch at start */
-    /* If you want gradient: background: linear-gradient(180deg, #0f1524 0%, #0f1524 100%); */
+  @apply sticky top-0 h-screen w-full overflow-hidden flex flex-col justify-center;
+  background: #0f1524; /* Solid background to prevent transparency glitch at start */
+  /* If you want gradient: background: linear-gradient(180deg, #0f1524 0%, #0f1524 100%); */
 }
 
 /* Horizontal Track */
 .horizontal-track {
-    @apply relative flex items-center gap-[10vw] px-[10vw] will-change-transform;
-    width: max-content;
+  @apply relative flex items-center gap-[10vw] px-[10vw] will-change-transform;
+  width: max-content;
 }
 
 .episodes-track-progress {
-    @apply absolute top-1/2 -translate-y-1/2 h-px pointer-events-none z-0;
+  @apply absolute top-1/2 -translate-y-1/2 h-px pointer-events-none z-0;
 }
 
 .episodes-track-progress-line {
-    @apply absolute inset-0 bg-white/10;
+  @apply absolute inset-0 bg-white/10;
 }
 
 .episodes-track-progress-fill {
-    @apply absolute left-0 top-0 h-full bg-primary w-0;
-    box-shadow: 0 0 15px rgba(88, 199, 214, 0.8);
+  @apply absolute left-0 top-0 h-full bg-primary w-0;
+  box-shadow: 0 0 15px rgba(88, 199, 214, 0.8);
 }
 
 /* Timeline */
 .timeline-container {
-    @apply fixed left-0 right-0 top-1/2 -translate-y-1/2 h-0.5 w-full -z-10 pointer-events-none;
+  @apply fixed left-0 right-0 top-1/2 -translate-y-1/2 h-0.5 w-full -z-10 pointer-events-none;
 }
 
 .timeline-line {
-    @apply absolute left-0 top-0 h-full w-full bg-border opacity-30;
+  @apply absolute left-0 top-0 h-full w-full bg-border opacity-30;
 }
 
 .timeline-fill {
-    @apply absolute left-0 top-0 h-full bg-primary origin-left scale-x-0 transition-transform duration-100 ease-linear;
-    box-shadow: 0 0 15px var(--color-primary);
+  @apply absolute left-0 top-0 h-full bg-primary origin-left scale-x-0 transition-transform duration-100 ease-linear;
+  box-shadow: 0 0 15px var(--color-primary);
 }
 
 /* Episode Card */
 .episode-card {
-    @apply relative flex-shrink-0 w-[88vw] md:w-[78vw] lg:w-[70vw] aspect-video 
+  @apply relative flex-shrink-0 w-[88vw] md:w-[78vw] lg:w-[70vw] aspect-video 
            bg-bg-card border border-border rounded-3xl overflow-hidden shadow-2xl 
            transition-all duration-500 ease-out transform;
-    scroll-snap-align: center;
-    z-index: 1;
+  scroll-snap-align: center;
+  z-index: 1;
 }
 
 .episode-card.active {
-    @apply border-white/25 scale-[1.01] shadow-xl;
-    z-index: 2;
+  @apply border-white/25 scale-[1.01] shadow-xl;
+  z-index: 2;
+}
+
+.episode-card.is-saved {
+  border-color: rgba(88, 199, 214, 0.5);
+  box-shadow:
+    0 24px 60px rgba(4, 10, 24, 0.55),
+    0 0 24px rgba(88, 199, 214, 0.22);
 }
 
 .episode-card:hover {
-    @apply border-primary scale-[1.03] -translate-y-1.5;
-    box-shadow: 0 30px 70px rgba(4, 10, 24, 0.65), 0 0 34px rgba(88, 199, 214, 0.18);
+  @apply border-primary scale-[1.03] -translate-y-1.5;
+  box-shadow:
+    0 30px 70px rgba(4, 10, 24, 0.65),
+    0 0 34px rgba(88, 199, 214, 0.18);
 }
 
 .episode-card:focus-visible {
-    @apply outline outline-2 outline-offset-2 outline-primary;
+  @apply outline outline-2 outline-offset-2 outline-primary;
 }
 
 .card-image-wrapper {
-    @apply relative w-full h-full overflow-hidden;
+  @apply relative w-full h-full overflow-hidden;
 }
 
 .card-image {
-    @apply w-full h-full object-cover transition-transform duration-700;
-    /* Slight zoom trims thin dark edges present in some source thumbnails */
-    transform: scale(1.018);
+  @apply w-full h-full object-cover transition-transform duration-700;
+  /* Slight zoom trims thin dark edges present in some source thumbnails */
+  transform: scale(1.018);
 }
 
 .episode-card:hover .card-image {
-    @apply scale-110;
+  @apply scale-110;
 }
 
 .card-image-wrapper::after {
-    content: '';
-    @apply absolute inset-0 opacity-0 transition-opacity duration-500;
-    background: linear-gradient(180deg, rgba(4, 10, 24, 0.05), rgba(4, 10, 24, 0.56));
+  content: "";
+  @apply absolute inset-0 opacity-0 transition-opacity duration-500;
+  background: linear-gradient(
+    180deg,
+    rgba(4, 10, 24, 0.05),
+    rgba(4, 10, 24, 0.56)
+  );
 }
 
 .episode-card:hover .card-image-wrapper::after {
-    @apply opacity-100;
+  @apply opacity-100;
 }
 
 .card-content {
-    @apply absolute bottom-0 left-0 w-full p-8 md:p-12 bg-gradient-to-t from-black via-black/80 to-transparent;
+  @apply absolute bottom-0 left-0 w-full p-8 md:p-12 bg-gradient-to-t from-black via-black/80 to-transparent;
 }
 
 .card-play-overlay {
-    @apply absolute inset-0 opacity-0 transition-all duration-300 flex items-center justify-center backdrop-blur-[1px];
-    background: linear-gradient(180deg, rgba(6, 15, 30, 0.08), rgba(6, 15, 30, 0.48));
+  @apply absolute inset-0 opacity-0 transition-all duration-300 flex items-center justify-center backdrop-blur-[1px];
+  background: linear-gradient(
+    180deg,
+    rgba(6, 15, 30, 0.08),
+    rgba(6, 15, 30, 0.48)
+  );
 }
 
 .episode-card:hover .card-play-overlay,
 .episode-card:focus-within .card-play-overlay {
-    @apply opacity-100;
+  @apply opacity-100;
 }
 
 .card-play-btn {
-    @apply w-20 h-20 md:w-24 md:h-24 rounded-full bg-primary text-slate-900 flex items-center justify-center
+  @apply w-20 h-20 md:w-24 md:h-24 rounded-full bg-primary text-slate-900 flex items-center justify-center
            transform scale-90 transition-transform duration-300;
-    box-shadow: 0 0 30px rgba(88, 199, 214, 0.45);
+  box-shadow: 0 0 30px rgba(88, 199, 214, 0.45);
 }
 
 .episode-card:hover .card-play-btn,
 .episode-card:focus-within .card-play-btn {
-    @apply scale-100;
+  @apply scale-100;
 }
 
 .episode-number {
-    @apply inline-block px-4 py-1.5 mb-3 text-sm font-bold text-primary bg-primary-soft rounded-full uppercase tracking-wider backdrop-blur-sm border border-primary-soft;
+  @apply inline-block px-4 py-1.5 mb-3 text-sm font-bold text-primary bg-primary-soft rounded-full uppercase tracking-wider backdrop-blur-sm border border-primary-soft;
 }
 
 .episode-title {
-    @apply text-3xl md:text-5xl font-bold leading-tight mb-4 text-white drop-shadow-lg;
+  @apply text-3xl md:text-5xl font-bold leading-tight mb-4 text-white drop-shadow-lg;
 }
 
 .episode-meta {
-    @apply flex items-center gap-6 text-base md:text-lg text-gray-300 mt-4 font-medium;
+  @apply flex items-center gap-6 text-base md:text-lg text-gray-300 mt-4 font-medium;
+}
+
+.episode-saved-pill {
+  @apply inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary;
+  border-color: rgba(88, 199, 214, 0.4);
+  background: rgba(88, 199, 214, 0.15);
 }
 
 /* Audio Wave Animation under active card */
 .audio-wave {
-    @apply absolute -bottom-12 left-1/2 -translate-x-1/2 flex items-end gap-1 h-8 opacity-0 transition-opacity duration-300;
+  @apply absolute -bottom-12 left-1/2 -translate-x-1/2 flex items-end gap-1 h-8 opacity-0 transition-opacity duration-300;
 }
 
 .episode-card.active .audio-wave {
-    @apply opacity-100;
+  @apply opacity-100;
 }
 
 .wave-bar {
-    @apply w-1 bg-primary rounded-t-full animate-equalize;
+  @apply w-1 bg-primary rounded-t-full animate-equalize;
 }
 
-.wave-bar:nth-child(1) { animation-delay: 0.0s; height: 40%; }
-.wave-bar:nth-child(2) { animation-delay: 0.1s; height: 70%; }
-.wave-bar:nth-child(3) { animation-delay: 0.2s; height: 100%; }
-.wave-bar:nth-child(4) { animation-delay: 0.3s; height: 60%; }
-.wave-bar:nth-child(5) { animation-delay: 0.15s; height: 80%; }
+.wave-bar:nth-child(1) {
+  animation-delay: 0s;
+  height: 40%;
+}
+.wave-bar:nth-child(2) {
+  animation-delay: 0.1s;
+  height: 70%;
+}
+.wave-bar:nth-child(3) {
+  animation-delay: 0.2s;
+  height: 100%;
+}
+.wave-bar:nth-child(4) {
+  animation-delay: 0.3s;
+  height: 60%;
+}
+.wave-bar:nth-child(5) {
+  animation-delay: 0.15s;
+  height: 80%;
+}
 
 /* Player Modal */
 .player-modal {
-    @apply fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 backdrop-blur-xl opacity-0 pointer-events-none transition-all duration-300;
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 backdrop-blur-xl opacity-0 pointer-events-none transition-all duration-300;
 }
 
 .player-modal.open {
-    @apply opacity-100 pointer-events-auto;
+  @apply opacity-100 pointer-events-auto;
 }
 
 .player-content {
-    @apply relative w-[90vw] max-w-5xl bg-bg-card border border-border rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row;
-    max-height: 90vh;
+  @apply relative w-[90vw] max-w-5xl bg-bg-card border border-border rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row;
+  max-height: 90vh;
 }
 
 .player-video {
-    @apply w-full md:w-2/3 aspect-video bg-black;
+  @apply w-full md:w-2/3 aspect-video bg-black;
 }
 
 .player-controls {
-    @apply w-full md:w-1/3 p-6 flex flex-col justify-between border-l border-border;
+  @apply w-full md:w-1/3 p-6 flex flex-col justify-between border-l border-border;
 }
 
 .close-btn {
-    @apply absolute top-4 right-4 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur transition-colors;
+  @apply absolute top-4 right-4 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur transition-colors;
 }
 
 .play-mode-toggle {
-    @apply flex gap-2 p-1 bg-slate-800 rounded-lg mb-6;
+  @apply flex gap-2 p-1 bg-slate-800 rounded-lg mb-6;
 }
 
 .mode-btn {
-    @apply flex-1 py-2 text-sm font-semibold text-center rounded-md transition-colors text-text-muted hover:text-white;
+  @apply flex-1 py-2 text-sm font-semibold text-center rounded-md transition-colors text-text-muted hover:text-white;
 }
 
 .mode-btn.active {
-    @apply bg-primary text-slate-900 shadow-sm;
+  @apply bg-primary text-slate-900 shadow-sm;
 }
 
 /* Layout Utilities */
 .section-header-large {
-    @apply absolute top-[10vh] left-[10vw] z-10 max-w-md;
+  @apply absolute top-[10vh] left-[10vw] z-10 max-w-md;
 }
 
 .section-title-large {
-    @apply text-5xl md:text-7xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-text-secondary;
+  @apply text-5xl md:text-7xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-text-secondary;
 }
 
 .scrolldown-hint {
-    @apply absolute bottom-8 left-1/2 -translate-x-1/2 text-text-muted text-sm animate-bounce;
+  @apply absolute bottom-8 left-1/2 -translate-x-1/2 text-text-muted text-sm animate-bounce;
 }
 
 #scroll-hint.is-dismissed {
-    @apply opacity-0 pointer-events-none;
-    transition: opacity 0.2s ease;
+  @apply opacity-0 pointer-events-none;
+  transition: opacity 0.2s ease;
 }
 
 #player-modal.modal-open {
-    @apply opacity-100 pointer-events-auto;
+  @apply opacity-100 pointer-events-auto;
 }
 
 #player-modal #close-player {
-    @apply bg-black/30 backdrop-blur-sm border border-white/10;
+  @apply bg-black/30 backdrop-blur-sm border border-white/10;
 }
 
 #player-modal #close-player:hover {
-    @apply border-white/25;
+  @apply border-white/25;
 }
 
 #player-modal #youtube-player-container {
-    @apply bg-black transition-all duration-300;
+  @apply bg-black transition-all duration-300;
 }
 
 #player-modal #youtube-player-container iframe {
-    @apply w-full h-full;
-    pointer-events: none;
+  @apply w-full h-full;
+  pointer-events: none;
 }
 
 #player-modal #youtube-player-container.audio-hidden {
-    @apply opacity-0 invisible;
+  @apply opacity-0 invisible;
 }
 
 #player-shell {
-    @apply mt-0;
+  @apply mt-0;
 }
 
 #player-stage:fullscreen,
 #player-stage:-webkit-full-screen {
-    @apply w-screen h-screen;
+  @apply w-screen h-screen;
 }
 
 #player-stage:fullscreen .player-controls-panel,
 #player-stage:-webkit-full-screen .player-controls-panel {
-    @apply max-w-[min(92vw,920px)];
+  @apply w-auto;
+  left: clamp(0.75rem, 2vw, 1.5rem);
+  right: clamp(0.75rem, 2vw, 1.5rem);
 }
 
 #player-stage.is-audio-mode {
-    background: radial-gradient(circle at 50% 35%, rgba(88, 199, 214, 0.16), rgba(15, 21, 36, 0.92));
+  background: radial-gradient(
+    circle at 50% 35%,
+    rgba(88, 199, 214, 0.16),
+    rgba(15, 21, 36, 0.92)
+  );
+}
+
+#player-stage.controls-hidden {
+  cursor: none;
+}
+
+#player-stage.controls-hidden,
+#player-stage.controls-hidden * {
+  cursor: none !important;
+}
+
+.player-controls-hidden-cursor,
+.player-controls-hidden-cursor * {
+  cursor: none !important;
+}
+
+#player-stage.controls-hidden .player-controls-panel {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px);
+}
+
+#player-hover-capture {
+  pointer-events: none;
+}
+
+#player-stage.controls-hidden #player-hover-capture {
+  pointer-events: auto;
+}
+
+#player-media-column {
+  @apply min-h-0;
 }
 
 #player-modal #audio-visualizer {
-    background: radial-gradient(circle at 50% 45%, rgba(88, 199, 214, 0.2), transparent 58%),
-        linear-gradient(135deg, rgba(15, 21, 36, 0.92), rgba(16, 32, 56, 0.9));
+  background:
+    radial-gradient(
+      circle at 50% 45%,
+      rgba(88, 199, 214, 0.2),
+      transparent 58%
+    ),
+    linear-gradient(135deg, rgba(15, 21, 36, 0.92), rgba(16, 32, 56, 0.9));
 }
 
 .player-sidebar {
-    @apply space-y-4;
+  @apply space-y-4;
 }
 
 .player-description {
-    @apply text-sm text-white/70 p-3.5 rounded-xl bg-black/20 border border-white/10 leading-relaxed;
-    max-height: 8rem;
-    overflow: auto;
+  @apply text-sm text-white/70 p-3.5 rounded-xl bg-black/20 border border-white/10 leading-relaxed transition-all;
+  overflow: hidden;
+}
+
+.player-description-text {
+  @apply block;
+}
+
+.player-description.is-collapsed .player-description-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.player-description.is-expanded .player-description-text {
+  display: block;
+}
+
+.player-desc-toggle {
+  @apply mt-2 flex w-full cursor-pointer items-center justify-between gap-2 border-0 bg-transparent p-0 text-xs font-semibold text-primary transition-colors hover:text-white;
+}
+
+.player-desc-toggle[hidden] {
+  display: none !important;
+}
+
+.player-desc-toggle:focus-visible {
+  @apply outline outline-2 outline-offset-2 outline-primary;
+}
+
+.player-desc-toggle-icon {
+  @apply h-4 w-4 shrink-0 transition-transform;
+}
+
+.player-description.is-expanded .player-desc-toggle-icon {
+  transform: rotate(180deg);
 }
 
 .player-controls-panel {
-    @apply absolute left-1/2 -translate-x-1/2 bottom-3 z-20 w-[min(94%,820px)] p-2.5 rounded-xl border border-white/10 bg-slate-950/80 backdrop-blur-md space-y-2;
+  @apply absolute bottom-3 z-20 w-auto rounded-xl border border-white/10 bg-slate-950/80 p-2 backdrop-blur-md space-y-1 transition-all duration-200 ease-out;
+  left: clamp(0.75rem, 2vw, 1.25rem);
+  right: clamp(0.75rem, 2vw, 1.25rem);
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .player-seek-wrap {
-    @apply space-y-1;
+  @apply space-y-0.5;
 }
 
 .player-time-row {
-    @apply flex items-center justify-between text-[11px] text-white/60 font-medium;
+  @apply flex items-center justify-between text-[10px] text-white/60 font-medium;
 }
 
 #player-seek,
 #player-volume {
-    @apply w-full;
-    -webkit-appearance: none;
-    appearance: none;
-    height: 3px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.22);
+  @apply w-full;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
 }
 
 #player-seek::-webkit-slider-thumb,
 #player-volume::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 12px;
-    border-radius: 999px;
-    background: rgba(88, 199, 214, 1);
-    border: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(88, 199, 214, 1);
+  border: 0;
 }
 
 #player-seek::-moz-range-thumb,
 #player-volume::-moz-range-thumb {
-    width: 12px;
-    height: 12px;
-    border-radius: 999px;
-    background: rgba(88, 199, 214, 1);
-    border: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(88, 199, 214, 1);
+  border: 0;
 }
 
 .player-controls-row {
-    @apply flex items-center justify-between gap-3;
+  @apply flex items-center justify-between gap-2;
 }
 
 .player-left-controls,
 .player-right-controls {
-    @apply flex items-center gap-2;
+  @apply flex items-center gap-1.5;
 }
 
 .player-right-controls {
-    @apply min-w-0;
+  @apply min-w-0;
 }
 
 .icon-btn {
-    @apply h-8 min-w-8 px-2 rounded-lg border border-white/15 bg-white/5 text-white text-xs font-semibold flex items-center justify-center transition-colors;
+  @apply h-7 min-w-7 px-2 rounded-lg border border-white/15 bg-white/5 text-white text-[11px] font-semibold flex items-center justify-center transition-colors;
 }
 
 .icon-btn:hover {
-    @apply bg-white/10 border-white/25;
+  @apply bg-white/10 border-white/25;
 }
 
 .icon-btn-primary {
-    @apply bg-primary text-slate-900 border-primary;
+  @apply bg-primary text-slate-900 border-primary;
 }
 
 .icon-btn-primary:hover {
-    @apply bg-primary;
-    filter: brightness(1.06);
+  @apply bg-primary;
+  filter: brightness(1.06);
 }
 
 .player-state-label {
-    @apply text-[11px] text-white/60 font-medium tracking-wide;
+  @apply text-[11px] text-white/60 font-medium tracking-wide;
 }
 
 #player-mute,
 #player-speed,
 #player-fullscreen {
-    @apply h-8 px-2.5 rounded-lg border border-white/10 bg-white/5 text-white text-xs font-semibold;
+  @apply h-7 px-2.5 rounded-lg border border-white/10 bg-white/5 text-white text-[11px] font-semibold;
+}
+
+#player-mute {
+  @apply inline-flex items-center justify-center;
+}
+
+#player-mute svg {
+  @apply h-4 w-4;
 }
 
 #player-speed {
-    @apply pr-6;
+  @apply pr-6;
 }
 
 #player-volume {
-    @apply w-20 md:w-24;
+  @apply w-20 md:w-24;
+}
+
+.player-episode-actions {
+  @apply flex min-h-[56px] items-center gap-2 border-t border-white/10 bg-slate-950 px-3 py-2 md:px-4;
+}
+
+.episode-action-btn {
+  @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-white/85 transition-all hover:border-primary hover:bg-white/[0.1] hover:text-white;
+}
+
+.episode-action-btn svg {
+  @apply h-4 w-4 shrink-0;
+}
+
+.episode-action-btn.is-saved {
+  @apply text-primary;
+  border-color: rgba(88, 199, 214, 0.5);
+  background: rgba(88, 199, 214, 0.15);
+}
+
+.episode-action-btn.is-saved svg {
+  fill: currentColor;
+}
+
+.episode-action-status {
+  @apply min-w-0 flex-1 truncate rounded-full px-2.5 py-1 text-[11px] text-white/55 opacity-0 transition-all;
+}
+
+.episode-action-status.is-visible {
+  @apply opacity-100;
+  background: rgba(88, 199, 214, 0.12);
+  color: rgba(226, 248, 252, 0.95);
+}
+
+.episode-action-status.is-error {
+  background: rgba(248, 113, 113, 0.14);
+  color: rgba(254, 202, 202, 0.95);
+}
+
+.episode-action-btn.is-feedback {
+  border-color: rgba(88, 199, 214, 0.7);
+  background: rgba(88, 199, 214, 0.16);
+  color: #e5fbff;
 }
 
 .audio-cover-wrap {
-    box-shadow: 0 30px 55px rgba(2, 6, 17, 0.7), 0 0 26px rgba(88, 199, 214, 0.22);
+  box-shadow:
+    0 30px 55px rgba(2, 6, 17, 0.7),
+    0 0 26px rgba(88, 199, 214, 0.22);
 }
 
 #mode-video,
 #mode-audio {
-    @apply transition-all duration-200;
+  @apply transition-all duration-200;
 }
 
 .episode-comments {
-    @apply rounded-2xl border border-white/10 bg-black/20 p-4;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
+  @apply rounded-2xl border border-white/10 bg-black/20 p-4;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.episode-tabs {
+  @apply mb-4 grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1;
+}
+
+.episode-tab {
+  @apply flex min-w-0 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-white/65 transition-all;
+}
+
+.episode-tab.is-active {
+  @apply bg-white/10 text-white shadow-sm;
+}
+
+.episode-tab-panel {
+  @apply min-h-0 flex-1 flex-col;
+  display: flex;
+}
+
+.episode-tab-panel[hidden] {
+  display: none !important;
+}
+
+.episode-forum-new-link,
+.episode-forum-open-link {
+  @apply inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold no-underline transition-all;
+}
+
+.episode-forum-new-link {
+  @apply mb-2.5 text-slate-900;
+  border-color: rgba(104, 191, 207, 0.28);
+  background: rgb(109, 186, 198);
+  box-shadow: 0 10px 24px rgba(28, 70, 94, 0.22);
+}
+
+.episode-forum-new-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(118, 207, 223, 0.4);
+  box-shadow: 0 14px 28px rgba(28, 70, 94, 0.24);
+}
+
+.episode-forum-new-link svg,
+.episode-forum-open-link svg {
+  @apply h-4 w-4 shrink-0;
+}
+
+.episode-forum-open-link {
+  @apply mt-3 text-[#9ec2e0];
+  border-color: rgba(138, 167, 197, 0.24);
+  background: rgba(24, 40, 70, 0.68);
+}
+
+.episode-forum-open-link:hover {
+  border-color: rgba(112, 220, 236, 0.35);
+  color: #dffbff;
+}
+
+.episode-forum-list {
+  @apply flex max-h-full min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-1;
+}
+
+.episode-forum-thread {
+  @apply rounded-xl border px-3 py-2.5 no-underline transition-all;
+  border-color: rgba(138, 167, 197, 0.18);
+  background: linear-gradient(
+    180deg,
+    rgba(23, 37, 64, 0.9),
+    rgba(18, 31, 54, 0.96)
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.episode-forum-thread:hover {
+  border-color: rgba(112, 220, 236, 0.34);
+  background: linear-gradient(
+    180deg,
+    rgba(26, 43, 74, 0.94),
+    rgba(20, 35, 61, 0.98)
+  );
+}
+
+.episode-forum-thread-top {
+  @apply flex items-start gap-2.5;
+}
+
+.episode-forum-thread-icon {
+  @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border;
+  border-color: rgba(112, 220, 236, 0.34);
+  background: rgba(20, 39, 67, 0.9);
+  color: #8fe0ef;
+}
+
+.episode-forum-thread-icon svg {
+  @apply h-4 w-4;
+}
+
+.episode-forum-thread-title {
+  @apply m-0 min-w-0 flex-1 text-[13px] font-medium leading-snug text-[#edf3ff];
+}
+
+.episode-forum-thread-meta {
+  @apply mt-1.5 flex items-center justify-between gap-3 text-[11px] text-[#9eb1cb];
+  padding-left: 2.375rem;
+}
+
+.episode-forum-thread-count {
+  @apply shrink-0 whitespace-nowrap text-[11px] font-medium text-[#b9cde4];
+}
+
+.episode-forum-thread-category {
+  @apply inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold;
+  border-color: rgba(105, 208, 226, 0.2);
+  background: rgba(137, 88, 225, 0.2);
+  color: #ddd0ff;
+}
+
+.episode-forum-thread-meta-right {
+  @apply flex shrink-0 items-center gap-2;
+}
+
+.episode-forum-thread-time {
+  @apply whitespace-nowrap;
+}
+
+.episode-forum-thread-avatar {
+  @apply inline-flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-semibold uppercase;
+  border-color: rgba(150, 186, 220, 0.26);
+  background: rgba(52, 72, 112, 0.74);
+  color: #d7e7fb;
 }
 
 .comments-head {
-    @apply flex items-center justify-between gap-3 mb-4 pb-3 border-b border-white/10;
+  @apply flex items-center justify-between gap-3 mb-4 pb-3 border-b border-white/10;
 }
 
 .comments-title {
-    @apply text-sm font-semibold text-white;
+  @apply text-sm font-semibold text-white;
 }
 
 .comments-count {
-    @apply text-[11px] font-bold text-primary bg-primary-soft border border-primary-soft rounded-full px-2 py-0.5 leading-none;
+  @apply text-[11px] font-bold text-primary bg-primary-soft border border-primary-soft rounded-full px-2 py-0.5 leading-none;
 }
 
 .comments-status {
-    @apply text-xs text-white/70 mb-2 min-h-[1rem] text-center;
+  @apply text-xs text-white/70 mb-2 min-h-[1rem] text-center;
 }
 
 /* Comment compose form at top */
 .comment-form-top {
-    @apply mb-4;
+  @apply mb-4;
 }
 
 .comment-compose {
-    @apply rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden;
+  @apply rounded-xl border border-white/10 bg-white/[0.03] overflow-hidden;
 }
 
 .comment-form-top .comment-input {
-    @apply w-full border-0 bg-transparent text-sm text-white px-3.5 py-3 placeholder:text-white/55 focus:outline-none;
-    min-height: 52px;
-    max-height: 120px;
-    resize: none;
+  @apply w-full border-0 bg-transparent text-sm text-white px-3.5 py-3 placeholder:text-white/55 focus:outline-none;
+  min-height: 52px;
+  max-height: 120px;
+  resize: none;
 }
 
 .comment-form-top .comment-input:focus {
-    @apply ring-0;
+  @apply ring-0;
 }
 
 .comment-form-actions {
-    @apply flex items-center justify-between gap-2 px-3 py-2 border-t border-white/[0.06] bg-white/[0.02];
+  @apply flex items-center justify-between gap-2 px-3 py-2 border-t border-white/[0.06] bg-white/[0.02];
 }
 
 .comment-auth-note {
-    @apply text-[11px] text-white/65 leading-snug flex-1 min-w-0;
+  @apply text-[11px] text-white/65 leading-snug flex-1 min-w-0;
 }
 
 .comment-submit {
-    @apply h-8 px-3.5 rounded-lg bg-primary text-slate-900 text-xs font-semibold transition-all inline-flex items-center justify-center gap-1.5 shrink-0 hover:brightness-110;
+  @apply h-8 px-3.5 rounded-lg bg-primary text-slate-900 text-xs font-semibold transition-all inline-flex items-center justify-center gap-1.5 shrink-0 hover:brightness-110;
 }
 
 .comment-submit:disabled {
-    @apply opacity-50 cursor-not-allowed;
+  @apply opacity-50 cursor-not-allowed;
 }
 
 /* Comment list */
 .comments-list {
-    @apply space-y-2 overflow-y-auto pr-1 flex-1 min-h-0;
-    max-height: 100%;
+  @apply space-y-2 overflow-y-auto pr-1 flex-1 min-h-0;
+  max-height: 100%;
+}
+
+.player-sidebar,
+.comments-list,
+.episode-forum-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(88, 199, 214, 0.58) rgba(255, 255, 255, 0.06);
+}
+
+.player-sidebar::-webkit-scrollbar,
+.comments-list::-webkit-scrollbar,
+.episode-forum-list::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.player-sidebar::-webkit-scrollbar-track,
+.comments-list::-webkit-scrollbar-track,
+.episode-forum-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.player-sidebar::-webkit-scrollbar-thumb,
+.comments-list::-webkit-scrollbar-thumb,
+.episode-forum-list::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(11, 18, 32, 0.9);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(88, 199, 214, 0.88),
+    rgba(65, 132, 149, 0.72)
+  );
+}
+
+.player-sidebar::-webkit-scrollbar-thumb:hover,
+.comments-list::-webkit-scrollbar-thumb:hover,
+.episode-forum-list::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(128, 226, 238, 0.96),
+    rgba(88, 199, 214, 0.82)
+  );
 }
 
 .comment-item {
-    @apply rounded-lg bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06];
+  @apply rounded-lg bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.06];
 }
 
 .comment-item-head {
-    @apply flex items-center justify-between gap-2 mb-1;
+  @apply flex items-center justify-between gap-2 mb-1;
 }
 
 .comment-item-meta {
-    @apply flex items-center gap-2 min-w-0 flex-1;
+  @apply flex items-center gap-2 min-w-0 flex-1;
 }
 
 .comment-item-actions {
-    @apply flex items-center gap-1 shrink-0;
+  @apply flex items-center gap-1 shrink-0;
 }
 
 .comment-action-btn {
-    @apply h-6 px-2 rounded text-[10px] font-medium border-0 bg-transparent text-white/70 transition-all inline-flex items-center justify-center;
+  @apply h-6 px-2 rounded text-[10px] font-medium border-0 bg-transparent text-white/70 transition-all inline-flex items-center justify-center;
 }
 
 .comment-action-btn:hover {
-    @apply text-white bg-white/10;
+  @apply text-white bg-white/10;
 }
 
 .comment-action-btn:disabled {
-    @apply opacity-50 cursor-not-allowed;
+  @apply opacity-50 cursor-not-allowed;
 }
 
 .comment-action-btn-danger {
-    @apply text-red-300/60;
+  @apply text-red-300/60;
 }
 
 .comment-action-btn-danger:hover {
-    @apply text-red-300 bg-red-500/15;
+  @apply text-red-300 bg-red-500/15;
 }
 
 .comment-author {
-    @apply text-xs font-semibold text-white/90 truncate;
+  @apply text-xs font-semibold text-white/90 truncate;
 }
 
 .comment-time {
-    @apply text-[10px] text-white/55 shrink-0;
+  @apply text-[10px] text-white/55 shrink-0;
 }
 
 .comment-body {
-    @apply text-[13px] text-white/70 leading-relaxed break-words;
+  @apply text-[13px] text-white/70 leading-relaxed break-words;
 }
 
 /* ─── Keyframes ─── */
 
 @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 @keyframes cardReveal {
-    0% { opacity: 0; transform: translateY(24px) scale(0.96); }
-    100% { opacity: 1; transform: translateY(0) scale(1); }
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* ─── Skeleton Loading ─── */
 
 .skeleton-card {
-    @apply relative flex-shrink-0 w-[88vw] md:w-[78vw] lg:w-[70vw] aspect-video
+  @apply relative flex-shrink-0 w-[88vw] md:w-[78vw] lg:w-[70vw] aspect-video
            bg-bg-card border border-border rounded-3xl overflow-hidden;
 }
 
 .skeleton-shimmer {
-    background: linear-gradient(
-        90deg,
-        rgba(255, 255, 255, 0) 0%,
-        rgba(255, 255, 255, 0.04) 40%,
-        rgba(255, 255, 255, 0.08) 50%,
-        rgba(255, 255, 255, 0.04) 60%,
-        rgba(255, 255, 255, 0) 100%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.8s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.04) 40%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 60%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
 }
 
 .skeleton-card-image {
-    @apply absolute inset-0 bg-white/[0.03];
+  @apply absolute inset-0 bg-white/[0.03];
 }
 
 .skeleton-card-content {
-    @apply absolute bottom-0 left-0 w-full p-8 md:p-12;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+  @apply absolute bottom-0 left-0 w-full p-8 md:p-12;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
 }
 
 .skeleton-badge {
-    @apply w-28 h-7 rounded-full bg-white/[0.06] mb-3;
+  @apply w-28 h-7 rounded-full bg-white/[0.06] mb-3;
 }
 
 .skeleton-title {
-    @apply h-10 md:h-14 w-3/4 rounded-xl bg-white/[0.06] mb-4;
+  @apply h-10 md:h-14 w-3/4 rounded-xl bg-white/[0.06] mb-4;
 }
 
 .skeleton-meta {
-    @apply h-5 w-40 rounded-lg bg-white/[0.04] mt-4;
+  @apply h-5 w-40 rounded-lg bg-white/[0.04] mt-4;
 }
 
 /* Comment Skeletons */
 .skeleton-comment {
-    @apply rounded-lg bg-white/[0.04] p-3;
+  @apply rounded-lg bg-white/[0.04] p-3;
 }
 
 .skeleton-comment-head {
-    @apply flex items-center gap-2 mb-2;
+  @apply flex items-center gap-2 mb-2;
 }
 
 .skeleton-comment-avatar {
-    @apply w-6 h-6 rounded-full bg-white/[0.06];
+  @apply w-6 h-6 rounded-full bg-white/[0.06];
 }
 
 .skeleton-comment-name {
-    @apply w-20 h-3 rounded bg-white/[0.06];
+  @apply w-20 h-3 rounded bg-white/[0.06];
 }
 
 .skeleton-comment-time {
-    @apply w-16 h-2.5 rounded bg-white/[0.04] ml-auto;
+  @apply w-16 h-2.5 rounded bg-white/[0.04] ml-auto;
 }
 
 .skeleton-comment-body {
-    @apply h-3 rounded bg-white/[0.04];
+  @apply h-3 rounded bg-white/[0.04];
 }
 
 .skeleton-comment-body-short {
-    @apply h-3 w-2/3 rounded bg-white/[0.04] mt-1.5;
+  @apply h-3 w-2/3 rounded bg-white/[0.04] mt-1.5;
 }
 
 /* ─── Card Reveal Animation ─── */
 
 .episode-card {
-    opacity: 0;
-    animation: cardReveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  opacity: 0;
+  animation: cardReveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.episode-card[data-reveal-delay="0"] { animation-delay: 0s; }
-.episode-card[data-reveal-delay="1"] { animation-delay: 0.08s; }
-.episode-card[data-reveal-delay="2"] { animation-delay: 0.16s; }
-.episode-card[data-reveal-delay="3"] { animation-delay: 0.24s; }
-.episode-card[data-reveal-delay="4"] { animation-delay: 0.32s; }
-.episode-card[data-reveal-delay="5"] { animation-delay: 0.40s; }
-.episode-card[data-reveal-delay="6"] { animation-delay: 0.48s; }
-.episode-card[data-reveal-delay="7"] { animation-delay: 0.56s; }
+.episode-card[data-reveal-delay="0"] {
+  animation-delay: 0s;
+}
+.episode-card[data-reveal-delay="1"] {
+  animation-delay: 0.08s;
+}
+.episode-card[data-reveal-delay="2"] {
+  animation-delay: 0.16s;
+}
+.episode-card[data-reveal-delay="3"] {
+  animation-delay: 0.24s;
+}
+.episode-card[data-reveal-delay="4"] {
+  animation-delay: 0.32s;
+}
+.episode-card[data-reveal-delay="5"] {
+  animation-delay: 0.4s;
+}
+.episode-card[data-reveal-delay="6"] {
+  animation-delay: 0.48s;
+}
+.episode-card[data-reveal-delay="7"] {
+  animation-delay: 0.56s;
+}
 
 /* ─── Image Fade-In on Load ─── */
 
 .card-image {
-    transition: transform 0.7s ease;
+  transition: transform 0.7s ease;
 }
 
 /* ─── Improved Player Modal Transitions ─── */
 
 #player-modal {
-    transition: opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-                transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-                backdrop-filter 0.4s ease;
+  transition:
+    opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    backdrop-filter 0.4s ease;
 }
 
 #player-shell {
-    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
-                opacity 0.4s ease;
+  transition:
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.4s ease;
 }
 
 #player-modal.modal-open #player-shell {
-    animation: cardReveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: cardReveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* ─── Smoother Card Hover ─── */
 
 .episode-card {
-    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-                border-color 0.3s ease,
-                box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-    contain: layout style paint;
+  transition:
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.3s ease,
+    box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  contain: layout style paint;
 }
 
 /* ─── Progress Bar Smoothing ─── */
 
 #timeline-fill-bottom {
-    transition: width 0.15s linear;
+  transition: width 0.15s linear;
 }
 
 .episodes-track-progress-fill {
-    transition: width 0.15s linear;
+  transition: width 0.15s linear;
 }
 
 @keyframes markerPulse {
-    0%, 100% {
-        transform: translate(-50%, -50%) scale(1.06);
-        box-shadow: 0 0 0 0 rgba(88, 199, 214, 0.35);
-    }
-    50% {
-        transform: translate(-50%, -50%) scale(1.2);
-        box-shadow: 0 0 0 8px rgba(88, 199, 214, 0);
-    }
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1.06);
+    box-shadow: 0 0 0 0 rgba(88, 199, 214, 0.35);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.2);
+    box-shadow: 0 0 0 8px rgba(88, 199, 214, 0);
+  }
 }
 
 /* ─── Mobile: Vertical Feed Layout ─── */
@@ -650,479 +1034,574 @@ body.player-open {
    vertical card feed. No sticky viewport, no transforms, just scroll. */
 
 @media (max-width: 767px) {
-
-    /* ── Disable scroll-jacking structure ── */
-    #scroll-container {
-        height: auto !important;
-    }
-
-    #sticky-wrapper {
-        position: relative !important;
-        height: auto !important;
-        overflow: visible !important;
-        justify-content: flex-start !important;
-        padding-top: 7rem;
-        background: transparent !important;
-    }
-
-    /* Hide desktop-only decorations */
-    #section-header,
-    #scroll-hint,
-    #progress-bar-container {
-        display: none !important;
-    }
-
-    /* ── Mobile controls bar ── */
-    #episodes-controls {
-        position: relative !important;
-        top: auto !important;
-        right: auto !important;
-        left: auto !important;
-        width: 100%;
-        @apply flex items-center gap-3 px-4 pt-2 pb-3;
-    }
-
-    #mobile-episodes-title {
-        display: block !important;
-    }
-
-    /* Hide jump button on mobile – natural scrolling is fine */
-    #scroll-jump-btn {
-        display: none !important;
-    }
-
-    /* ── Vertical card track ── */
-    #horizontal-track {
-        position: relative;
-        flex-direction: column !important;
-        align-items: stretch !important;
-        gap: 0.875rem !important;
-        padding: 0 1rem 2rem 2rem !important;
-        transform: none !important;
-        will-change: auto !important;
-        height: auto !important;
-    }
-
-    /* ── Episode cards: compact vertical ── */
-    .episode-card {
-        width: 100% !important;
-        aspect-ratio: 16 / 9;
-        @apply rounded-2xl;
-        flex-shrink: 0;
-        animation: none !important;
-        opacity: 1 !important;
-    }
-
-    /* Disable scale transforms on mobile */
-    .episode-card.active {
-        transform: none !important;
-        @apply border-border;
-        z-index: 1;
-    }
-
-    .episode-card:hover {
-        transform: none !important;
-        box-shadow: none;
-    }
-
-    /* Compact card content overlay */
-    .card-content {
-        @apply p-3 pb-4;
-        background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.45) 55%, transparent 100%);
-    }
-
-    .episode-title {
-        @apply text-[0.9375rem] font-semibold leading-snug mb-1;
-    }
-
-    .episode-number {
-        @apply text-[10px] px-2 py-0.5 mb-1.5;
-    }
-
-    .episode-meta {
-        @apply text-[0.6875rem] gap-2 mt-1;
-    }
-
-    /* Hide play overlay – card is tappable */
-    .card-play-overlay {
-        display: none !important;
-    }
-
-    /* Always show gradient for text readability */
-    .card-image-wrapper::after {
-        @apply opacity-100;
-    }
-
-    /* Hide audio wave indicators */
-    .audio-wave {
-        display: none !important;
-    }
-
-    /* Vertical progress bar connecting episodes */
-    .episodes-track-progress {
-        display: block !important;
-        position: absolute !important;
-        left: 0.625rem !important;
-        top: 0.5rem !important;
-        bottom: 0.5rem !important;
-        width: 2px !important;
-        height: auto !important;
-        transform: none !important;
-    }
-
-    .episodes-track-progress-line {
-        width: 100% !important;
-        height: 100% !important;
-    }
-
-    .episodes-track-progress-fill {
-        width: 100% !important;
-        height: 0%;
-        transition: height 0.15s linear;
-        box-shadow: 0 0 8px rgba(88, 199, 214, 0.4);
-    }
-
-    .episodes-track-marker {
-        position: absolute;
-        left: 50%;
-        width: 0.72rem;
-        height: 0.72rem;
-        border-radius: 9999px;
-        transform: translate(-50%, -50%) scale(0.9);
-        background: rgba(15, 21, 36, 0.95);
-        border: 1px solid rgba(255, 255, 255, 0.34);
-        box-shadow: 0 0 0 1px rgba(15, 21, 36, 0.45);
-        transition: transform 0.22s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.24s ease;
-        z-index: 2;
-        pointer-events: none;
-    }
-
-    .episodes-track-marker::after {
-        content: '';
-        position: absolute;
-        inset: 2px;
-        border-radius: 9999px;
-        background: rgba(255, 255, 255, 0.28);
-        transition: background-color 0.2s ease;
-    }
-
-    .episodes-track-marker.is-passed {
-        border-color: rgba(88, 199, 214, 0.9);
-        background: rgba(22, 51, 66, 0.95);
-        box-shadow: 0 0 10px rgba(88, 199, 214, 0.28);
-    }
-
-    .episodes-track-marker.is-passed::after {
-        background: rgba(88, 199, 214, 0.95);
-    }
-
-    .episodes-track-marker.is-active {
-        animation: none;
-        border-color: rgba(88, 199, 214, 1);
-        box-shadow: 0 0 14px rgba(88, 199, 214, 0.45);
-    }
-
-    /* ── Skeleton cards ── */
-    .skeleton-card {
-        width: 100% !important;
-        @apply rounded-2xl;
-    }
-
-    .skeleton-card-content {
-        @apply p-4;
-    }
-
-    .skeleton-title {
-        @apply h-5 w-2/3;
-    }
-
-    .skeleton-badge {
-        @apply w-16 h-4;
-    }
-
-    .skeleton-meta {
-        @apply h-3 w-28;
-    }
-
-    /* ══════════ Mobile Player Rework ══════════ */
-
-    /* Keep backdrop full-screen, but place card below nav */
-    #player-modal {
-        @apply items-stretch justify-start;
-        inset: 0 !important;
-        padding: 7.5rem 3vw 0 !important;
-    }
-
-    /* Shell: rounded container with gap from edges */
-    #player-shell {
-        @apply flex-col;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-radius: 1.25rem !important;
-        width: 100% !important;
-        height: calc(100dvh - 8rem) !important;
-        max-height: calc(100dvh - 8rem) !important;
-        overflow: hidden;
-    }
-
-    /* Video stage – viewport-relative height */
-    #player-stage {
-        @apply flex-shrink-0 relative;
-        height: 28svh;
-        max-height: 28svh;
-    }
-
-    /* Gradient fade from video into sidebar */
-    #player-stage::after {
-        content: '';
-        @apply absolute bottom-0 left-0 right-0 pointer-events-none z-10;
-        height: 3svh;
-        background: linear-gradient(to top, #0d1320, transparent);
-    }
-
-    /* Controls: compact, centered, gradient bg */
-    .player-controls-panel {
-        @apply absolute bottom-0 z-20 border-0;
-        left: 0 !important;
-        right: 0 !important;
-        transform: none !important;
-        width: 100% !important;
-        border-radius: 0 !important;
-        padding: 0.4svh 3vw 0.6svh !important;
-        background: linear-gradient(to top, rgba(0, 0, 0, 0.88) 50%, transparent);
-        -webkit-backdrop-filter: blur(6px);
-        backdrop-filter: blur(6px);
-    }
-
-    .player-controls-panel > * + * {
-        margin-top: 0.25svh;
-    }
-
-    .player-seek-wrap {
-        @apply space-y-0;
-    }
-
-    .player-time-row {
-        font-size: clamp(9px, 2.5vw, 12px);
-    }
-
-    .player-controls-row {
-        gap: 1.5vw;
-    }
-
-    .player-left-controls,
-    .player-right-controls {
-        gap: 1.5vw;
-    }
-
-    /* Compact buttons */
-    .icon-btn {
-        height: 3.2svh;
-        min-width: 8vw;
-        @apply rounded-lg;
-        font-size: clamp(9px, 2.5vw, 12px);
-    }
-
-    .icon-btn-primary {
-        height: 3.6svh;
-        min-width: 9vw;
-        @apply rounded-lg;
-    }
-
-    #player-mute,
-    #player-speed,
-    #player-fullscreen {
-        height: 3.2svh;
-        @apply rounded-lg;
-    }
-
-    #player-mute {
-        padding-left: 2vw;
-        padding-right: 2vw;
-    }
-
-    #player-speed {
-        padding-left: 1.5vw;
-        padding-right: 5vw;
-        font-size: clamp(9px, 2.5vw, 12px);
-    }
-
-    #player-volume {
-        display: none !important;
-    }
-
-    .player-state-label {
-        display: none !important;
-    }
-
-    /* Seek bar */
-    #player-seek {
-        height: 3px;
-    }
-
-    #player-seek::-webkit-slider-thumb {
-        width: 3.5vw;
-        height: 3.5vw;
-    }
-
-    #player-seek::-moz-range-thumb {
-        width: 3.5vw;
-        height: 3.5vw;
-    }
-
-    /* Close button: prominent, viewport-scaled */
-    #close-player {
-        top: 1.5svh;
-        right: 3vw;
-        @apply z-[60];
-        padding: 2.5vw;
-        background: rgba(0, 0, 0, 0.5) !important;
-        -webkit-backdrop-filter: blur(10px);
-        backdrop-filter: blur(10px);
-    }
-
-    #close-player svg {
-        width: 6vw;
-        height: 6vw;
-    }
-
-    /* Sidebar – fills remaining space */
-    #player-shell > div:last-child {
-        @apply flex-1 min-h-0;
-        border-top: 0 !important;
-        background: linear-gradient(180deg, #0d1320, #0f1524);
-    }
-
-    .player-sidebar {
-        padding: 3vw;
-        display: flex;
-        flex-direction: column;
-        gap: 2svh;
-        overflow-y: auto !important;
-        min-height: 0;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    .player-sidebar > * + * {
-        margin-top: 0;
-    }
-
-    /* Episode info – viewport-scaled text */
-    #player-episode-num {
-        font-size: clamp(10px, 2.8vw, 13px);
-        padding: 0.5svh 3vw;
-    }
-
-    #player-date {
-        font-size: clamp(10px, 2.5vw, 12px);
-    }
-
-    #player-title {
-        font-size: clamp(16px, 4.5vw, 22px);
-        line-height: 1.25;
-    }
-
-    /* Mode toggle */
-    #mode-video,
-    #mode-audio {
-        padding: 1.2svh 3vw;
-        font-size: clamp(11px, 3vw, 14px);
-    }
-
-    #audio-visualizer .audio-cover-wrap {
-        width: 28vw;
-        height: 28vw;
-        @apply rounded-2xl;
-    }
-
-    /* ── Description: generous space, scrollable ── */
-    .player-description {
-        max-height: 22svh;
-        min-height: 8svh;
-        font-size: clamp(12px, 3.2vw, 15px);
-        padding: 3vw;
-        @apply rounded-xl leading-relaxed border border-white/10 bg-black/20;
-        display: block;
-        overflow-y: auto;
-        -webkit-line-clamp: unset;
-        line-clamp: unset;
-        -webkit-box-orient: unset;
-    }
-
-    /* Comments – contained within parent */
-    .episode-comments {
-        padding: 3vw;
-        @apply rounded-xl;
-        flex: 0 0 auto;
-        min-height: 0;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .comments-head {
-        margin-bottom: 1.5svh;
-        padding-bottom: 1svh;
-        flex-shrink: 0;
-    }
-
-    .comment-form-top {
-        flex-shrink: 0;
-        margin-bottom: 2vw;
-        max-width: 100%;
-        overflow: hidden;
-    }
-
-    .comment-compose {
-        max-width: 100%;
-        overflow: hidden;
-    }
-
-    .comment-form-top .comment-input {
-        min-height: 5svh;
-        font-size: clamp(11px, 3vw, 14px);
-        padding: 1.5svh 3vw;
-        box-sizing: border-box;
-        width: 100%;
-    }
-
-    .comment-form-actions {
-        padding: 1svh 2.5vw;
-        flex-wrap: wrap;
-    }
-
-    .comment-auth-note {
-        font-size: clamp(9px, 2.4vw, 11px);
-    }
-
-    .comment-submit {
-        height: 4svh;
-        padding-left: 3vw;
-        padding-right: 3vw;
-        font-size: clamp(10px, 2.8vw, 12px);
-    }
-
-    .comment-item {
-        padding: 2vw;
-    }
-
-    .comment-body {
-        font-size: clamp(11px, 3vw, 14px);
-    }
-
-    .comment-author {
-        font-size: clamp(10px, 2.8vw, 13px);
-    }
-
-    .comment-time {
-        font-size: clamp(8px, 2.2vw, 11px);
-    }
-
-    .comments-list {
-        gap: 1svh;
-        flex: 0 0 auto;
-        min-height: 0;
-        max-height: 34svh;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
+  /* ── Disable scroll-jacking structure ── */
+  #scroll-container {
+    height: auto !important;
+  }
+
+  #sticky-wrapper {
+    position: relative !important;
+    height: auto !important;
+    overflow: visible !important;
+    justify-content: flex-start !important;
+    padding-top: 7rem;
+    background: transparent !important;
+  }
+
+  /* Hide desktop-only decorations */
+  #section-header,
+  #scroll-hint,
+  #progress-bar-container {
+    display: none !important;
+  }
+
+  /* ── Mobile controls bar ── */
+  #episodes-controls {
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+    left: auto !important;
+    width: 100%;
+    @apply flex items-center gap-3 px-4 pt-2 pb-3;
+  }
+
+  #mobile-episodes-title {
+    display: block !important;
+  }
+
+  /* Hide jump button on mobile – natural scrolling is fine */
+  #scroll-jump-btn {
+    display: none !important;
+  }
+
+  /* ── Vertical card track ── */
+  #horizontal-track {
+    position: relative;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.875rem !important;
+    padding: 0 1rem 2rem 2rem !important;
+    transform: none !important;
+    will-change: auto !important;
+    height: auto !important;
+  }
+
+  /* ── Episode cards: compact vertical ── */
+  .episode-card {
+    width: 100% !important;
+    aspect-ratio: 16 / 9;
+    @apply rounded-2xl;
+    flex-shrink: 0;
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  /* Disable scale transforms on mobile */
+  .episode-card.active {
+    transform: none !important;
+    @apply border-border;
+    z-index: 1;
+  }
+
+  .episode-card:hover {
+    transform: none !important;
+    box-shadow: none;
+  }
+
+  /* Compact card content overlay */
+  .card-content {
+    @apply p-3 pb-4;
+    background: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.88) 0%,
+      rgba(0, 0, 0, 0.45) 55%,
+      transparent 100%
+    );
+  }
+
+  .episode-title {
+    @apply text-[0.9375rem] font-semibold leading-snug mb-1;
+  }
+
+  .episode-number {
+    @apply text-[10px] px-2 py-0.5 mb-1.5;
+  }
+
+  .episode-meta {
+    @apply text-[0.6875rem] gap-2 mt-1;
+  }
+
+  /* Hide play overlay – card is tappable */
+  .card-play-overlay {
+    display: none !important;
+  }
+
+  /* Always show gradient for text readability */
+  .card-image-wrapper::after {
+    @apply opacity-100;
+  }
+
+  /* Hide audio wave indicators */
+  .audio-wave {
+    display: none !important;
+  }
+
+  /* Vertical progress bar connecting episodes */
+  .episodes-track-progress {
+    display: block !important;
+    position: absolute !important;
+    left: 0.625rem !important;
+    top: 0.5rem !important;
+    bottom: 0.5rem !important;
+    width: 2px !important;
+    height: auto !important;
+    transform: none !important;
+  }
+
+  .episodes-track-progress-line {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .episodes-track-progress-fill {
+    width: 100% !important;
+    height: 0%;
+    transition: height 0.15s linear;
+    box-shadow: 0 0 8px rgba(88, 199, 214, 0.4);
+  }
+
+  .episodes-track-marker {
+    position: absolute;
+    left: 50%;
+    width: 0.72rem;
+    height: 0.72rem;
+    border-radius: 9999px;
+    transform: translate(-50%, -50%) scale(0.9);
+    background: rgba(15, 21, 36, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    box-shadow: 0 0 0 1px rgba(15, 21, 36, 0.45);
+    transition:
+      transform 0.22s ease,
+      border-color 0.2s ease,
+      background-color 0.2s ease,
+      box-shadow 0.24s ease;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .episodes-track-marker::after {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.28);
+    transition: background-color 0.2s ease;
+  }
+
+  .episodes-track-marker.is-passed {
+    border-color: rgba(88, 199, 214, 0.9);
+    background: rgba(22, 51, 66, 0.95);
+    box-shadow: 0 0 10px rgba(88, 199, 214, 0.28);
+  }
+
+  .episodes-track-marker.is-passed::after {
+    background: rgba(88, 199, 214, 0.95);
+  }
+
+  .episodes-track-marker.is-active {
+    animation: none;
+    border-color: rgba(88, 199, 214, 1);
+    box-shadow: 0 0 14px rgba(88, 199, 214, 0.45);
+  }
+
+  /* ── Skeleton cards ── */
+  .skeleton-card {
+    width: 100% !important;
+    @apply rounded-2xl;
+  }
+
+  .skeleton-card-content {
+    @apply p-4;
+  }
+
+  .skeleton-title {
+    @apply h-5 w-2/3;
+  }
+
+  .skeleton-badge {
+    @apply w-16 h-4;
+  }
+
+  .skeleton-meta {
+    @apply h-3 w-28;
+  }
+
+  /* ══════════ Mobile Player Rework ══════════ */
+
+  /* Keep backdrop full-screen, but place card below nav */
+  #player-modal {
+    @apply items-stretch justify-start;
+    inset: 0 !important;
+    padding: 7.5rem 3vw 0 !important;
+  }
+
+  /* Shell: rounded container with gap from edges */
+  #player-shell {
+    @apply flex-col;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 1.25rem !important;
+    width: 100% !important;
+    height: calc(100dvh - 8rem) !important;
+    max-height: calc(100dvh - 8rem) !important;
+    overflow: hidden;
+  }
+
+  #player-media-column {
+    @apply flex-shrink-0;
+  }
+
+  /* Video stage – viewport-relative height */
+  #player-stage {
+    @apply flex-shrink-0 relative;
+    height: 28svh;
+    max-height: 28svh;
+  }
+
+  /* Gradient fade from video into sidebar */
+  #player-stage::after {
+    content: "";
+    @apply absolute bottom-0 left-0 right-0 pointer-events-none z-10;
+    height: 3svh;
+    background: linear-gradient(to top, #0d1320, transparent);
+  }
+
+  /* Controls: compact, centered, gradient bg */
+  .player-controls-panel {
+    @apply absolute z-20 border border-white/10;
+    left: 3vw !important;
+    right: 3vw !important;
+    bottom: 0.75svh !important;
+    transform: translateY(0);
+    width: auto !important;
+    border-radius: 0.85rem !important;
+    padding: 0.35svh 2.5vw 0.5svh !important;
+    background: rgba(2, 6, 17, 0.82);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+
+  #player-stage.controls-hidden .player-controls-panel {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(10px);
+  }
+
+  #player-stage.controls-hidden #player-hover-capture {
+    pointer-events: auto;
+  }
+
+  .player-controls-panel > * + * {
+    margin-top: 0.25svh;
+  }
+
+  .player-seek-wrap {
+    @apply space-y-0;
+  }
+
+  .player-time-row {
+    font-size: clamp(9px, 2.5vw, 12px);
+  }
+
+  .player-controls-row {
+    gap: 1.5vw;
+  }
+
+  .player-left-controls,
+  .player-right-controls {
+    gap: 1.5vw;
+  }
+
+  /* Compact buttons */
+  .icon-btn {
+    height: 2.9svh;
+    min-width: 7.5vw;
+    @apply rounded-lg;
+    font-size: clamp(9px, 2.5vw, 12px);
+  }
+
+  .icon-btn-primary {
+    height: 3.1svh;
+    min-width: 8.2vw;
+    @apply rounded-lg;
+  }
+
+  #player-mute,
+  #player-speed,
+  #player-fullscreen {
+    height: 2.9svh;
+    @apply rounded-lg;
+  }
+
+  #player-mute {
+    padding-left: 2vw;
+    padding-right: 2vw;
+  }
+
+  #player-speed {
+    padding-left: 1.5vw;
+    padding-right: 5vw;
+    font-size: clamp(9px, 2.5vw, 12px);
+  }
+
+  #player-mute svg {
+    width: 4vw;
+    height: 4vw;
+  }
+
+  .player-episode-actions {
+    min-height: 5.4svh;
+    padding: 0.8svh 3vw;
+    gap: 2vw;
+  }
+
+  .episode-action-btn {
+    height: 3.8svh;
+    padding-left: 3vw;
+    padding-right: 3vw;
+    font-size: clamp(10px, 2.7vw, 12px);
+  }
+
+  .episode-action-btn svg {
+    width: 4vw;
+    height: 4vw;
+  }
+
+  .episode-action-status {
+    font-size: clamp(9px, 2.4vw, 11px);
+  }
+
+  #player-volume {
+    display: none !important;
+  }
+
+  .player-state-label {
+    display: none !important;
+  }
+
+  /* Seek bar */
+  #player-seek {
+    height: 3px;
+  }
+
+  #player-seek::-webkit-slider-thumb {
+    width: 3.5vw;
+    height: 3.5vw;
+  }
+
+  #player-seek::-moz-range-thumb {
+    width: 3.5vw;
+    height: 3.5vw;
+  }
+
+  /* Close button: prominent, viewport-scaled */
+  #close-player {
+    top: 1.5svh;
+    right: 3vw;
+    @apply z-[60];
+    padding: 2.5vw;
+    background: rgba(0, 0, 0, 0.5) !important;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+
+  #close-player svg {
+    width: 6vw;
+    height: 6vw;
+  }
+
+  /* Sidebar – fills remaining space */
+  #player-shell > div:last-child {
+    @apply flex-1 min-h-0;
+    border-top: 0 !important;
+    background: linear-gradient(180deg, #0d1320, #0f1524);
+  }
+
+  .player-sidebar {
+    padding: 3vw;
+    display: flex;
+    flex-direction: column;
+    gap: 2svh;
+    overflow-y: auto !important;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .player-sidebar > * + * {
+    margin-top: 0;
+  }
+
+  /* Episode info – viewport-scaled text */
+  #player-episode-num {
+    font-size: clamp(10px, 2.8vw, 13px);
+    padding: 0.5svh 3vw;
+  }
+
+  #player-date {
+    font-size: clamp(10px, 2.5vw, 12px);
+  }
+
+  #player-title {
+    font-size: clamp(16px, 4.5vw, 22px);
+    line-height: 1.25;
+  }
+
+  /* Mode toggle */
+  #mode-video,
+  #mode-audio {
+    padding: 1.2svh 3vw;
+    font-size: clamp(11px, 3vw, 14px);
+  }
+
+  #audio-visualizer .audio-cover-wrap {
+    width: 28vw;
+    height: 28vw;
+    @apply rounded-2xl;
+  }
+
+  /* ── Description: expands inside the main sidebar scroll ── */
+  .player-description {
+    min-height: 8svh;
+    font-size: clamp(12px, 3.2vw, 15px);
+    padding: 3vw;
+    @apply rounded-xl leading-relaxed border border-white/10 bg-black/20;
+    overflow: hidden;
+  }
+
+  .player-description.is-collapsed .player-description-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    line-clamp: 5;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .player-description.is-expanded .player-description-text {
+    display: block;
+    min-height: 8svh;
+  }
+
+  .player-desc-toggle {
+    height: auto;
+    min-height: 3svh;
+    padding-left: 0;
+    padding-right: 0;
+    font-size: clamp(10px, 2.8vw, 12px);
+  }
+
+  /* Comments – contained within parent */
+  .episode-comments {
+    padding: 3vw;
+    @apply rounded-xl;
+    flex: 0 0 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .comments-head {
+    margin-bottom: 1.5svh;
+    padding-bottom: 1svh;
+    flex-shrink: 0;
+  }
+
+  .comment-form-top {
+    flex-shrink: 0;
+    margin-bottom: 2vw;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .comment-compose {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .comment-form-top .comment-input {
+    min-height: 5svh;
+    font-size: clamp(11px, 3vw, 14px);
+    padding: 1.5svh 3vw;
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .comment-form-actions {
+    padding: 1svh 2.5vw;
+    flex-wrap: wrap;
+  }
+
+  .comment-auth-note {
+    font-size: clamp(9px, 2.4vw, 11px);
+  }
+
+  .comment-submit {
+    height: 4svh;
+    padding-left: 3vw;
+    padding-right: 3vw;
+    font-size: clamp(10px, 2.8vw, 12px);
+  }
+
+  .comment-item {
+    padding: 2vw;
+  }
+
+  .comment-body {
+    font-size: clamp(11px, 3vw, 14px);
+  }
+
+  .comment-author {
+    font-size: clamp(10px, 2.8vw, 13px);
+  }
+
+  .comment-time {
+    font-size: clamp(8px, 2.2vw, 11px);
+  }
+
+  .comments-list {
+    gap: 1svh;
+    flex: 0 0 auto;
+    min-height: 0;
+    max-height: 34svh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .episode-tabs {
+    margin-bottom: 1.5svh;
+  }
+
+  .episode-tab {
+    padding-top: 1svh;
+    padding-bottom: 1svh;
+    font-size: clamp(10px, 2.7vw, 12px);
+  }
+
+  .episode-forum-actions {
+    align-items: flex-start;
+    gap: 2vw;
+  }
+
+  .episode-forum-copy,
+  .episode-forum-thread-meta {
+    font-size: clamp(10px, 2.6vw, 12px);
+  }
+
+  .episode-forum-thread {
+    padding: 3vw;
+  }
+
+  .episode-forum-thread-title {
+    font-size: clamp(12px, 3.2vw, 15px);
+  }
 }

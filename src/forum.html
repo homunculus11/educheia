@@ -378,6 +378,67 @@
               ></div>
             </section>
 
+            <section
+              id="forum-episode-section"
+              class="forum-block forum-episode-block"
+              aria-labelledby="forum-episode-title"
+              hidden
+            >
+              <div class="forum-block-head forum-block-head-wide">
+                <div>
+                  <h2 id="forum-episode-title">Discuții pentru episod</h2>
+                  <p id="forum-episode-subtitle">
+                    Thread-uri conectate cu episodul selectat.
+                  </p>
+                </div>
+                <div class="forum-episode-actions">
+                  <button
+                    id="forum-episode-new-thread"
+                    type="button"
+                    class="btn btn-primary"
+                  >
+                    Thread nou pentru episod
+                  </button>
+                  <button
+                    id="forum-episode-clear"
+                    type="button"
+                    class="btn btn-ghost"
+                  >
+                    Șterge filtrul
+                  </button>
+                </div>
+              </div>
+
+              <div
+                id="episode-threads-loading"
+                class="forum-skeleton-list"
+                aria-hidden="true"
+                hidden
+              >
+                <article class="forum-thread-skeleton"></article>
+                <article class="forum-thread-skeleton"></article>
+              </div>
+
+              <div id="episode-threads-empty" class="forum-empty" hidden>
+                <h3>Niciun thread pentru episod încă</h3>
+                <p>Pornește prima discuție conectată cu episodul.</p>
+              </div>
+
+              <div
+                id="episode-threads-list"
+                class="forum-thread-list"
+                role="list"
+                aria-live="polite"
+              ></div>
+
+              <p
+                id="episode-threads-feedback"
+                class="forum-form-feedback"
+                role="status"
+                aria-live="polite"
+              ></p>
+            </section>
+
             <section class="forum-block" aria-labelledby="forum-active-title">
               <div class="forum-block-head forum-block-head-wide">
                 <div>
@@ -647,6 +708,11 @@
           <select id="thread-category" name="categoryId" required>
             <option value="">Selectează categoria</option>
           </select>
+
+          <div id="thread-episode-context" class="forum-episode-context" hidden>
+            <span>Conectat la episod</span>
+            <strong id="thread-episode-context-label">Episod selectat</strong>
+          </div>
 
           <div id="thread-sticky-wrap" class="forum-sticky-toggle" hidden>
             <label class="forum-sticky-label" for="thread-is-sticky">

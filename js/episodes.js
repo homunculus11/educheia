@@ -26,6 +26,7 @@ let playerState = {
 let currentAuthUser = null;
 let currentAuthClaims = {};
 let activeCommentsRequestId = 0;
+let activeEpisodeForumRequestId = 0;
 let isSubmittingComment = false;
 let isCommentActionPending = false;
 const commentsById = new Map();
@@ -46,8 +47,11 @@ let orderByFn = null;
 let queryFn = null;
 let serverTimestampFn = null;
 let updateDocFn = null;
+let whereFn = null;
 let firebaseReadyPromise = null;
 let mobileTrackRefreshRaf = 0;
+let episodeForumCategoriesPromise = null;
+let episodeForumCategoriesById = new Map();
 
 let lastFocusedElement = null;
 
@@ -55,6 +59,7 @@ const isMobileLayout = () => window.matchMedia("(max-width: 767px)").matches;
 
 const EPISODES_CACHE_KEY = "episodesCacheV1";
 const EPISODES_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const SAVED_EPISODES_KEY = "savedEpisodeIdsV1";
 
 const readEpisodesCache = () => {
   try {
@@ -106,6 +111,55 @@ const writeEpisodesCache = (items = []) => {
   }
 };
 
+const readSavedEpisodeIds = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SAVED_EPISODES_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((id) => String(id || "").trim())
+      .filter(Boolean)
+      .slice(0, 200);
+  } catch {
+    return [];
+  }
+};
+
+const writeSavedEpisodeIds = (ids = []) => {
+  try {
+    const uniqueIds = [...new Set(ids.map((id) => String(id || "").trim()))]
+      .filter(Boolean)
+      .slice(0, 200);
+    localStorage.setItem(SAVED_EPISODES_KEY, JSON.stringify(uniqueIds));
+  } catch {
+    return;
+  }
+};
+
+const isEpisodeSaved = (videoId) => readSavedEpisodeIds().includes(videoId);
+
+const sortEpisodesForCurrentOrder = () => {
+  const savedIds = new Set(readSavedEpisodeIds());
+  episodes = [...originalEpisodes].sort((a, b) => {
+    const savedDelta =
+      Number(savedIds.has(b.videoId)) - Number(savedIds.has(a.videoId));
+    if (savedDelta !== 0) return savedDelta;
+
+    return sortOrder === "desc" ? b.dateObj - a.dateObj : a.dateObj - b.dateObj;
+  });
+};
+
+const getEpisodeDisplayNumberForEpisode = (episode) => {
+  if (!episode?.videoId) return null;
+
+  const ordered = [...originalEpisodes].sort((a, b) => {
+    const dateDelta = a.dateObj - b.dateObj;
+    if (dateDelta !== 0) return dateDelta;
+    return String(a.videoId || "").localeCompare(String(b.videoId || ""));
+  });
+  const index = ordered.findIndex((item) => item.videoId === episode.videoId);
+  return index >= 0 ? index + 1 : null;
+};
+
 const normalizeEpisodeItems = (rawItems = []) =>
   rawItems.map((item) => {
     const snippet = item.snippet || item;
@@ -146,6 +200,7 @@ const ensureFirebaseReady = async () => {
       queryFn = firestoreModule.query;
       serverTimestampFn = firestoreModule.serverTimestamp;
       updateDocFn = firestoreModule.updateDoc;
+      whereFn = firestoreModule.where;
     })
     .catch((error) => {
       firebaseReadyPromise = null;
@@ -378,7 +433,7 @@ const init = async () => {
   const cachedItems = readEpisodesCache();
   if (cachedItems.length) {
     originalEpisodes = cachedItems;
-    episodes = [...originalEpisodes].sort((a, b) => b.dateObj - a.dateObj);
+    sortEpisodesForCurrentOrder();
     renderCards();
     updateScroll();
   }
@@ -392,7 +447,7 @@ const init = async () => {
       writeEpisodesCache(originalEpisodes);
 
       // Default Sort: Newest First
-      episodes = [...originalEpisodes].sort((a, b) => b.dateObj - a.dateObj);
+      sortEpisodesForCurrentOrder();
     } else {
       throw new Error("getEpisodes not available");
     }
@@ -406,7 +461,7 @@ const init = async () => {
       publishedAt: new Date().toISOString(),
       dateObj: new Date(),
     }));
-    episodes = [...originalEpisodes];
+    sortEpisodesForCurrentOrder();
   }
 
   // 2. Render Cards (replaces skeletons)
@@ -443,11 +498,7 @@ const setupControls = () => {
       }
 
       // Sort Data
-      episodes.sort((a, b) => {
-        return sortOrder === "desc" ?
-            b.dateObj - a.dateObj
-          : a.dateObj - b.dateObj;
-      });
+      sortEpisodesForCurrentOrder();
 
       // Re-render
       renderCards();
@@ -525,15 +576,17 @@ const renderCards = () => {
     const isLcpCandidate = index === 0;
     const imageLoading = isLcpCandidate ? "eager" : "lazy";
     const imageFetchPriority = isLcpCandidate ? "high" : "auto";
+    const saved = isEpisodeSaved(ep.videoId);
 
     // Use index for numbering display, but respect sort order
     // If sorting desc (newest first), display numbers N down to 1?
     // Or just "Episodul X" from title if available?
     // Let's stick to simple logic:
-    const displayNum = getEpisodeDisplayNumber(index);
+    const displayNum = getEpisodeDisplayNumberForEpisode(ep) || index + 1;
 
     const card = document.createElement("div");
-    card.className = "episode-card group";
+    card.className =
+      saved ? "episode-card group is-saved" : "episode-card group";
     card.dataset.index = index;
     card.dataset.id = ep.videoId;
     card.setAttribute("role", "button");
@@ -553,6 +606,7 @@ const renderCards = () => {
                     <h3 class="episode-title">${safeTitle}</h3>
                     <div class="episode-meta">
                         <span>${formatDate(ep.publishedAt)}</span>
+                        ${saved ? '<span class="episode-saved-pill">Salvat</span>' : ""}
                     </div>
                 </div>
                 
@@ -894,6 +948,9 @@ let youtubePlayer;
 let isPlayerReady = false;
 let isUserSeeking = false;
 let playerUiInterval = null;
+let controlsHideTimeout = 0;
+let isPointerOverPlayerControls = false;
+let episodeActionStatusTimeout = 0;
 let pendingSeekTime = 0;
 let optimisticTimelineSeconds = null;
 let optimisticTimelineLastTick = 0;
@@ -904,7 +961,14 @@ let youtubeApiReadyPromise = null;
 
 const PLAYBACK_MEMORY_KEY = "episodePlaybackPositions";
 const COMMENTS_COLLECTION = "episodeComments";
+const FORUM_THREADS_COLLECTION = "forumThreads";
+const FORUM_CATEGORIES_COLLECTION = "forumCategories";
 const COMMENT_MAX_LENGTH = 500;
+const EPISODE_FORUM_LIMIT = 12;
+const EPISODE_FORUM_DISPLAY_LIMIT = 3;
+const PLAYER_CONTROLS_HIDE_DELAY_MS = 2200;
+const EPISODE_ACTION_STATUS_MS = 2200;
+const PLAYER_CURSOR_HIDDEN_CLASS = "player-controls-hidden-cursor";
 const DEFAULT_QUALITY = "hd1080";
 const QUALITY_PRIORITY = [
   "highres",
@@ -917,6 +981,13 @@ const QUALITY_PRIORITY = [
   "small",
   "tiny",
 ];
+
+const PLAYER_VOLUME_ICONS = {
+  muted:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume-x-icon lucide-volume-x" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><line x1="22" x2="16" y1="9" y2="15"/><line x1="16" x2="22" y1="9" y2="15"/></svg>',
+  unmuted:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-volume2-icon lucide-volume-2" aria-hidden="true"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></svg>',
+};
 
 const escapeHtml = (value) =>
   String(value ?? "")
@@ -963,11 +1034,171 @@ const formatEpisodeDescription = (text) => {
   const compact = text.replace(/\s+/g, " ").trim();
   if (!compact) return "Descriere indisponibilă momentan.";
 
-  return compact.length > 320 ? `${compact.slice(0, 320).trim()}...` : compact;
+  return compact;
 };
 
 const getLoginRoute = () => {
   return "/login";
+};
+
+const slugifyForumThreadTitle = (value) => {
+  const rawSlug = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return rawSlug ? rawSlug.split("-").slice(0, 8).join("-") : "subiect";
+};
+
+const buildForumThreadUrl = (thread) => {
+  const threadId = encodeURIComponent(thread?.id || "");
+  const threadSlug = encodeURIComponent(
+    slugifyForumThreadTitle(thread?.title || ""),
+  );
+  return `/forum/thread/${threadId}/${threadSlug}`;
+};
+
+const buildEpisodePageUrl = (episode) => {
+  const url = new URL(
+    window.location.pathname || "/episodes",
+    window.location.origin,
+  );
+  if (episode?.videoId) {
+    url.hash = encodeURIComponent(episode.videoId);
+  }
+  return url.href;
+};
+
+const buildEpisodeForumUrl = (episode, { newThread = false } = {}) => {
+  const url = new URL("/forum", window.location.origin);
+  if (episode?.videoId) {
+    url.searchParams.set("episode", episode.videoId);
+  }
+  const title = String(episode?.title || "").trim();
+  if (title) {
+    url.searchParams.set("episodeTitle", title.slice(0, 180));
+  }
+  if (newThread) {
+    url.searchParams.set("new", "1");
+  }
+  return `${url.pathname}${url.search}`;
+};
+
+const getForumReplyLabel = (count) => (count === 1 ? "răspuns" : "răspunsuri");
+
+const extractInitials = (value = "") => {
+  const parts = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+  if (!parts.length) return "ME";
+  return parts.map((part) => part.charAt(0).toUpperCase()).join("");
+};
+
+const formatRelativeForumTimestamp = (value) => {
+  const dateValue =
+    value?.toDate?.() ||
+    (value instanceof Date ? value
+    : value ? new Date(value)
+    : null);
+  if (!dateValue || Number.isNaN(dateValue.getTime?.())) {
+    return "acum câteva momente";
+  }
+
+  const diffMs = Date.now() - dateValue.getTime();
+  const diffSeconds = Math.max(0, Math.floor(diffMs / 1000));
+  if (diffSeconds < 60) return "acum câteva secunde";
+
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) {
+    return diffMinutes === 1 ? "acum 1 minut" : `acum ${diffMinutes} minute`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return diffHours === 1 ? "acum 1 oră" : `acum ${diffHours} ore`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) {
+    return diffDays === 1 ? "acum 1 zi" : `acum ${diffDays} zile`;
+  }
+
+  return new Intl.DateTimeFormat("ro-RO", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(dateValue);
+};
+
+const loadEpisodeForumCategories = async () => {
+  if (episodeForumCategoriesById.size) return episodeForumCategoriesById;
+  if (episodeForumCategoriesPromise) return episodeForumCategoriesPromise;
+  if (!db || !collectionFn || !getDocsFn || !queryFn || !orderByFn) {
+    return episodeForumCategoriesById;
+  }
+
+  episodeForumCategoriesPromise = (async () => {
+    const categoriesRef = collectionFn(db, FORUM_CATEGORIES_COLLECTION);
+    let docs = [];
+
+    try {
+      if (whereFn) {
+        const snapshot = await getDocsFn(
+          queryFn(
+            categoriesRef,
+            whereFn("isArchived", "==", false),
+            orderByFn("name", "asc"),
+          ),
+        );
+        docs = snapshot.docs;
+      }
+
+      if (!docs.length) {
+        const fallbackSnapshot = await getDocsFn(categoriesRef);
+        docs = fallbackSnapshot.docs;
+      }
+    } catch {
+      const fallbackSnapshot = await getDocsFn(categoriesRef);
+      docs = fallbackSnapshot.docs;
+    }
+
+    const nextMap = new Map();
+    docs.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      if (data.isArchived) return;
+      const id = String(docSnap.id || "").trim();
+      const name = String(data.name || "").trim();
+      if (id && name) {
+        nextMap.set(id, name);
+      }
+    });
+
+    episodeForumCategoriesById = nextMap;
+    episodeForumCategoriesPromise = null;
+    return episodeForumCategoriesById;
+  })().catch((error) => {
+    episodeForumCategoriesPromise = null;
+    throw error;
+  });
+
+  return episodeForumCategoriesPromise;
+};
+
+const formatEpisodeForumCategoryLabel = (thread) => {
+  const categoryId = String(thread?.categoryId || "").trim();
+  if (!categoryId) {
+    return thread?.categoryType === "admin" ? "Administrare" : "General";
+  }
+
+  return (
+    episodeForumCategoriesById.get(categoryId) ||
+    (thread?.categoryType === "admin" ? "Administrare" : "General")
+  );
 };
 
 const getCommentDisplayName = (user) => {
@@ -1036,6 +1267,50 @@ const setCommentsStatus = (message = "") => {
 
   status.textContent = message;
   status.classList.toggle("hidden", !message);
+};
+
+const getEpisodeForumElements = () => ({
+  list: document.getElementById("episode-forum-list"),
+  status: document.getElementById("episode-forum-status"),
+  count: document.getElementById("episode-forum-count"),
+  openLink: document.getElementById("episode-forum-open-link"),
+  newLink: document.getElementById("episode-forum-new-link"),
+});
+
+const setEpisodeForumStatus = (message = "") => {
+  const { status } = getEpisodeForumElements();
+  if (!status) return;
+
+  status.textContent = message;
+  status.classList.toggle("hidden", !message);
+};
+
+const setEpisodeActionStatus = (message = "", { tone = "info" } = {}) => {
+  const status = document.getElementById("episode-action-status");
+  if (!status) return;
+
+  window.clearTimeout(episodeActionStatusTimeout);
+  status.textContent = message;
+  status.classList.toggle("is-visible", Boolean(message));
+  status.classList.toggle("is-error", tone === "error");
+
+  if (message) {
+    episodeActionStatusTimeout = window.setTimeout(() => {
+      status.classList.remove("is-visible", "is-error");
+      status.textContent = "";
+      episodeActionStatusTimeout = 0;
+    }, EPISODE_ACTION_STATUS_MS);
+  }
+};
+
+const pulseShareButtonFeedback = () => {
+  const shareBtn = document.getElementById("episode-share-btn");
+  if (!shareBtn) return;
+
+  shareBtn.classList.add("is-feedback");
+  window.setTimeout(() => {
+    shareBtn.classList.remove("is-feedback");
+  }, 900);
 };
 
 const updateCommentFormState = () => {
@@ -1151,8 +1426,12 @@ const loadEpisodeComments = async (episodeId) => {
     !orderByFn ||
     !limitFn ||
     !getDocsFn
-  )
+  ) {
+    setEpisodeForumStatus(
+      "Thread-urile forumului sunt indisponibile momentan.",
+    );
     return;
+  }
 
   const requestId = ++activeCommentsRequestId;
   count.textContent = "0";
@@ -1193,6 +1472,173 @@ const loadEpisodeComments = async (episodeId) => {
     console.error("Failed to load comments", error);
     if (requestId !== activeCommentsRequestId) return;
     setCommentsStatus("Nu am putut încărca comentariile. Încearcă din nou.");
+  }
+};
+
+const renderEpisodeForumSkeletons = (count = 2) => {
+  const { list } = getEpisodeForumElements();
+  if (!list) return;
+
+  list.innerHTML = Array.from(
+    { length: count },
+    () => `
+      <article class="episode-forum-thread" aria-hidden="true">
+        <div class="skeleton-comment-body skeleton-shimmer"></div>
+        <div class="skeleton-comment-body-short skeleton-shimmer"></div>
+      </article>
+    `,
+  ).join("");
+};
+
+const normalizeEpisodeForumThreads = (docs = []) =>
+  docs
+    .map((docSnap) => {
+      const data = docSnap.data() || {};
+      return {
+        id: docSnap.id,
+        title: String(data.title || "").trim() || "Subiect fără titlu",
+        authorName: String(data.authorName || "").trim() || "Membru",
+        authorUid: String(data.authorUid || "").trim(),
+        commentCount:
+          Number.isFinite(data.commentCount) ?
+            Math.max(0, Math.floor(data.commentCount))
+          : 0,
+        categoryId: String(data.categoryId || "").trim(),
+        categoryType: data.categoryType === "admin" ? "admin" : "normal",
+        createdAt: data.createdAt || null,
+        lastActivityAt: data.lastActivityAt || data.createdAt || null,
+      };
+    })
+    .filter((thread) => thread.id);
+
+const renderEpisodeForumThreads = (threads = []) => {
+  const { list, count, openLink } = getEpisodeForumElements();
+  if (!list || !count) return;
+
+  count.textContent = String(threads.length);
+  if (openLink) {
+    openLink.hidden = threads.length <= EPISODE_FORUM_DISPLAY_LIMIT;
+  }
+
+  if (!threads.length) {
+    list.innerHTML = "";
+    if (openLink) openLink.hidden = true;
+    setEpisodeForumStatus(
+      "Nu există thread-uri pentru acest episod încă. Pornește prima discuție.",
+    );
+    return;
+  }
+
+  setEpisodeForumStatus("");
+  list.innerHTML = threads
+    .slice(0, EPISODE_FORUM_DISPLAY_LIMIT)
+    .map((thread) => {
+      const safeTitle = escapeHtml(thread.title);
+      const safeCategory = escapeHtml(formatEpisodeForumCategoryLabel(thread));
+      const safeTime = escapeHtml(
+        formatRelativeForumTimestamp(thread.lastActivityAt || thread.createdAt),
+      );
+      const replyCount = Math.max(0, Number(thread.commentCount || 0));
+      const safeReplyCount = escapeHtml(
+        `${replyCount} ${getForumReplyLabel(replyCount)}`,
+      );
+      const safeUrl = escapeHtml(buildForumThreadUrl(thread));
+      const safeInitials = escapeHtml(extractInitials(thread.authorName));
+
+      return `
+        <a class="episode-forum-thread" href="${safeUrl}" role="listitem">
+          <div class="episode-forum-thread-top">
+            <span class="episode-forum-thread-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-circle-icon lucide-message-circle"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>
+            </span>
+            <h3 class="episode-forum-thread-title">${safeTitle}</h3>
+            <span class="episode-forum-thread-count">${safeReplyCount}</span>
+          </div>
+          <div class="episode-forum-thread-meta">
+            <span class="episode-forum-thread-category">${safeCategory}</span>
+            <span class="episode-forum-thread-meta-right">
+              <time class="episode-forum-thread-time">${safeTime}</time>
+              <span class="episode-forum-thread-avatar" aria-hidden="true">${safeInitials}</span>
+            </span>
+          </div>
+        </a>
+      `;
+    })
+    .join("");
+};
+
+const loadEpisodeForumThreads = async (episodeId) => {
+  const { list, count, openLink } = getEpisodeForumElements();
+  if (
+    !episodeId ||
+    !list ||
+    !count ||
+    !db ||
+    !collectionFn ||
+    !queryFn ||
+    !whereFn ||
+    !orderByFn ||
+    !limitFn ||
+    !getDocsFn
+  )
+    return;
+
+  const requestId = ++activeEpisodeForumRequestId;
+  count.textContent = "0";
+  if (openLink) openLink.hidden = true;
+  setEpisodeForumStatus("");
+  renderEpisodeForumSkeletons(2);
+
+  try {
+    await loadEpisodeForumCategories().catch(() => episodeForumCategoriesById);
+    const threadsRef = collectionFn(db, FORUM_THREADS_COLLECTION);
+    const orderedQuery = queryFn(
+      threadsRef,
+      whereFn("episodeId", "==", episodeId),
+      whereFn("moderationStatus", "==", "visible"),
+      orderByFn("lastActivityAt", "desc"),
+      limitFn(EPISODE_FORUM_LIMIT),
+    );
+    const snapshot = await getDocsFn(orderedQuery);
+
+    if (requestId !== activeEpisodeForumRequestId) return;
+    renderEpisodeForumThreads(normalizeEpisodeForumThreads(snapshot.docs));
+  } catch (error) {
+    try {
+      await loadEpisodeForumCategories().catch(
+        () => episodeForumCategoriesById,
+      );
+      const threadsRef = collectionFn(db, FORUM_THREADS_COLLECTION);
+      const fallbackQuery = queryFn(
+        threadsRef,
+        whereFn("episodeId", "==", episodeId),
+        whereFn("moderationStatus", "==", "visible"),
+        limitFn(20),
+      );
+      const fallbackSnapshot = await getDocsFn(fallbackQuery);
+
+      if (requestId !== activeEpisodeForumRequestId) return;
+      const threads = normalizeEpisodeForumThreads(fallbackSnapshot.docs)
+        .sort((a, b) => {
+          const aTime =
+            a.lastActivityAt?.toDate?.()?.getTime?.() ||
+            a.lastActivityAt?.getTime?.() ||
+            0;
+          const bTime =
+            b.lastActivityAt?.toDate?.()?.getTime?.() ||
+            b.lastActivityAt?.getTime?.() ||
+            0;
+          return bTime - aTime;
+        })
+        .slice(0, EPISODE_FORUM_LIMIT);
+      renderEpisodeForumThreads(threads);
+    } catch (fallbackError) {
+      console.error("Failed to load episode forum threads", fallbackError);
+      if (requestId !== activeEpisodeForumRequestId) return;
+      setEpisodeForumStatus(
+        "Nu am putut încărca thread-urile forumului pentru episod.",
+      );
+    }
   }
 };
 
@@ -1400,6 +1846,165 @@ const setupComments = () => {
   return commentsSetupPromise;
 };
 
+const setDescriptionExpanded = (isExpanded) => {
+  const description = document.getElementById("player-desc");
+  const toggle = document.getElementById("player-desc-toggle");
+  const label = document.getElementById("player-desc-toggle-label");
+  if (!description || !toggle) return;
+
+  description.classList.toggle("is-expanded", isExpanded);
+  description.classList.toggle("is-collapsed", !isExpanded);
+  toggle.setAttribute("aria-expanded", String(isExpanded));
+  if (label) {
+    label.textContent = isExpanded ? "Vezi mai puțin" : "Vezi mai mult";
+  }
+};
+
+const updateDescriptionToggleState = () => {
+  const description = document.getElementById("player-desc");
+  const descriptionText = document.getElementById("player-desc-text");
+  const toggle = document.getElementById("player-desc-toggle");
+  if (!description || !descriptionText || !toggle) return;
+
+  setDescriptionExpanded(false);
+  window.requestAnimationFrame(() => {
+    const isOverflowing =
+      descriptionText.scrollHeight > descriptionText.clientHeight + 4;
+    toggle.hidden = !isOverflowing;
+  });
+};
+
+const setMuteButtonState = (isMuted) => {
+  const muteBtn = document.getElementById("player-mute");
+  if (!muteBtn) return;
+
+  muteBtn.innerHTML =
+    isMuted ? PLAYER_VOLUME_ICONS.muted : PLAYER_VOLUME_ICONS.unmuted;
+  muteBtn.setAttribute(
+    "aria-label",
+    isMuted ? "Activează sunetul" : "Dezactivează sunetul",
+  );
+  muteBtn.setAttribute("aria-pressed", String(isMuted));
+};
+
+const updateEpisodeSaveButton = () => {
+  const episodeId = playerState.currentEpisode?.videoId;
+  const saveBtn = document.getElementById("episode-save-btn");
+  const saveLabel = document.getElementById("episode-save-label");
+  if (!saveBtn || !saveLabel) return;
+
+  const saved = Boolean(episodeId && isEpisodeSaved(episodeId));
+  saveBtn.classList.toggle("is-saved", saved);
+  saveBtn.setAttribute("aria-pressed", String(saved));
+  saveBtn.setAttribute(
+    "aria-label",
+    saved ?
+      "Elimină episodul din salvate"
+    : "Salvează episodul pentru mai târziu",
+  );
+  saveLabel.textContent = saved ? "Salvat" : "Salvează";
+};
+
+const toggleCurrentEpisodeSaved = () => {
+  const episodeId = playerState.currentEpisode?.videoId;
+  if (!episodeId) return;
+
+  const savedIds = readSavedEpisodeIds();
+  const isSaved = savedIds.includes(episodeId);
+  const nextSavedIds =
+    isSaved ?
+      savedIds.filter((id) => id !== episodeId)
+    : [episodeId, ...savedIds];
+  writeSavedEpisodeIds(nextSavedIds);
+  sortEpisodesForCurrentOrder();
+  renderCards();
+  updateScroll();
+  updateEpisodeSaveButton();
+  setEpisodeActionStatus(
+    isSaved ?
+      "Episod eliminat din salvate."
+    : "Episod salvat și mutat în față.",
+  );
+
+  const episodeNum = document.getElementById("player-episode-num");
+  const displayNumber = getEpisodeDisplayNumberForEpisode(
+    playerState.currentEpisode,
+  );
+  if (episodeNum) {
+    episodeNum.textContent =
+      displayNumber ? `EP ${String(displayNumber).padStart(2, "0")}` : "EP --";
+  }
+};
+
+const shareCurrentEpisode = async () => {
+  const episode = playerState.currentEpisode;
+  if (!episode?.videoId) return;
+
+  const shareUrl = buildEpisodePageUrl(episode);
+  const title = episode.title || "Episod Educheia";
+
+  try {
+    if (navigator.share) {
+      await navigator.share({ title, url: shareUrl });
+      setEpisodeActionStatus("Link pregătit pentru share.");
+      pulseShareButtonFeedback();
+      return;
+    }
+
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(shareUrl);
+      setEpisodeActionStatus("Link copiat.");
+      pulseShareButtonFeedback();
+      return;
+    }
+
+    setEpisodeActionStatus(shareUrl);
+    pulseShareButtonFeedback();
+  } catch {
+    setEpisodeActionStatus("Nu am putut copia linkul automat.", {
+      tone: "error",
+    });
+  }
+};
+
+const updateEpisodeForumLinks = (episode) => {
+  const { openLink, newLink } = getEpisodeForumElements();
+  if (openLink) {
+    openLink.href = buildEpisodeForumUrl(episode);
+  }
+  if (newLink) {
+    newLink.href = buildEpisodeForumUrl(episode, { newThread: true });
+  }
+};
+
+const setEpisodePanel = (panelName = "comments") => {
+  const normalizedPanel = panelName === "forum" ? "forum" : "comments";
+  const commentsPanel = document.getElementById("episode-comments-panel");
+  const forumPanel = document.getElementById("episode-forum-panel");
+  const tabButtons = document.querySelectorAll("[data-episode-panel]");
+
+  if (commentsPanel) {
+    commentsPanel.hidden = normalizedPanel !== "comments";
+  }
+  if (forumPanel) {
+    forumPanel.hidden = normalizedPanel !== "forum";
+  }
+
+  tabButtons.forEach((button) => {
+    const isActive = button.dataset.episodePanel === normalizedPanel;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+  });
+};
+
+const setupEpisodeTabs = () => {
+  document.querySelectorAll("[data-episode-panel]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setEpisodePanel(button.dataset.episodePanel);
+    });
+  });
+};
+
 const updateRangeProgress = (
   rangeInput,
   activeColor = "rgba(88, 199, 214, 1)",
@@ -1415,11 +2020,6 @@ const updateRangeProgress = (
   const clamped = Math.max(0, Math.min(100, percent));
 
   rangeInput.style.background = `linear-gradient(to right, ${activeColor} 0%, ${activeColor} ${clamped}%, ${trackColor} ${clamped}%, ${trackColor} 100%)`;
-};
-
-const getEpisodeDisplayNumber = (index) => {
-  if (index < 0) return null;
-  return sortOrder === "desc" ? episodes.length - index : index + 1;
 };
 
 const readPlaybackMemory = () => {
@@ -1544,8 +2144,10 @@ const applyInitialPlayerSettings = () => {
     youtubePlayer.setVolume(volumeValue);
     if (volumeValue === 0) {
       youtubePlayer.mute?.();
+      setMuteButtonState(true);
     } else {
       youtubePlayer.unMute?.();
+      setMuteButtonState(false);
     }
   }
 
@@ -1580,6 +2182,109 @@ const seekBy = (delta) => {
 const isFullscreenActive = () =>
   Boolean(document.fullscreenElement || document.webkitFullscreenElement);
 
+const getPlayerControlsPanel = () =>
+  document.querySelector("#player-stage .player-controls-panel");
+
+const isControlsFocusWithin = () => {
+  const controlsPanel = getPlayerControlsPanel();
+  return Boolean(
+    controlsPanel &&
+    document.activeElement instanceof HTMLElement &&
+    controlsPanel.contains(document.activeElement),
+  );
+};
+
+const isVideoCurrentlyPlaying = () =>
+  Boolean(
+    youtubePlayer?.getPlayerState?.() === window.YT?.PlayerState?.PLAYING,
+  );
+
+const shouldAutoHidePlayerControls = () =>
+  Boolean(
+    playerState.isOpen &&
+    playerState.mode === "video" &&
+    isVideoCurrentlyPlaying(),
+  );
+
+const updateAudioCoverArt = (episode) => {
+  const coverEl = document.getElementById("audio-cover");
+  if (!coverEl) return;
+
+  const episodeCover =
+    episode?.thumbnails?.maxres?.url ||
+    episode?.thumbnails?.high?.url ||
+    episode?.thumbnails?.medium?.url ||
+    (episode?.videoId ?
+      `https://img.youtube.com/vi/${episode.videoId}/hqdefault.jpg`
+    : "../images/logo-light.webp");
+
+  coverEl.src = episodeCover;
+  coverEl.alt = episode?.title ? `Copertă ${episode.title}` : "Copertă episod";
+  coverEl.removeAttribute("srcset");
+  coverEl.removeAttribute("sizes");
+};
+
+const clearPlayerControlsHideTimer = () => {
+  if (!controlsHideTimeout) return;
+  window.clearTimeout(controlsHideTimeout);
+  controlsHideTimeout = 0;
+};
+
+const setPlayerCursorHidden = (isHidden) => {
+  document.documentElement.classList.toggle(
+    PLAYER_CURSOR_HIDDEN_CLASS,
+    isHidden,
+  );
+  document.body.classList.toggle(PLAYER_CURSOR_HIDDEN_CLASS, isHidden);
+};
+
+const hidePlayerControlsIfIdle = () => {
+  const stage = document.getElementById("player-stage");
+  if (!stage) return;
+
+  if (
+    !shouldAutoHidePlayerControls() ||
+    isPointerOverPlayerControls ||
+    isControlsFocusWithin()
+  ) {
+    stage.classList.remove("controls-hidden");
+    setPlayerCursorHidden(false);
+    return;
+  }
+
+  stage.classList.add("controls-hidden");
+  setPlayerCursorHidden(true);
+};
+
+const schedulePlayerControlsHide = () => {
+  clearPlayerControlsHideTimer();
+  const stage = document.getElementById("player-stage");
+  if (!stage) return;
+
+  if (!shouldAutoHidePlayerControls()) {
+    stage.classList.remove("controls-hidden");
+    setPlayerCursorHidden(false);
+    return;
+  }
+
+  controlsHideTimeout = window.setTimeout(() => {
+    controlsHideTimeout = 0;
+    hidePlayerControlsIfIdle();
+  }, PLAYER_CONTROLS_HIDE_DELAY_MS);
+};
+
+const showPlayerControls = ({ scheduleHide = true } = {}) => {
+  const stage = document.getElementById("player-stage");
+  if (!stage) return;
+
+  clearPlayerControlsHideTimer();
+  stage.classList.remove("controls-hidden");
+  setPlayerCursorHidden(false);
+  if (scheduleHide) {
+    schedulePlayerControlsHide();
+  }
+};
+
 const setFullscreenButtonState = () => {
   const isActive = isFullscreenActive();
   const fullscreenBtn = document.getElementById("player-fullscreen");
@@ -1595,6 +2300,7 @@ const setFullscreenButtonState = () => {
 
   enterIcon?.classList.toggle("hidden", isActive);
   exitIcon?.classList.toggle("hidden", !isActive);
+  showPlayerControls();
 };
 
 const togglePlayerFullscreen = async () => {
@@ -1663,6 +2369,9 @@ const setupPlayerControls = () => {
   const volumeInput = document.getElementById("player-volume");
   const speedSelect = document.getElementById("player-speed");
   const fullscreenBtn = document.getElementById("player-fullscreen");
+  const playerStage = document.getElementById("player-stage");
+  const controlsPanel = getPlayerControlsPanel();
+  const hoverCapture = document.getElementById("player-hover-capture");
 
   playPauseBtn?.addEventListener("click", () => {
     togglePlayPause();
@@ -1701,10 +2410,10 @@ const setupPlayerControls = () => {
     youtubePlayer.setVolume?.(volume);
     if (volume === 0) {
       youtubePlayer.mute?.();
-      if (muteBtn) muteBtn.textContent = "Unmute";
+      setMuteButtonState(true);
     } else {
       youtubePlayer.unMute?.();
-      if (muteBtn) muteBtn.textContent = "Mute";
+      setMuteButtonState(false);
     }
   });
 
@@ -1712,14 +2421,15 @@ const setupPlayerControls = () => {
     if (!youtubePlayer || !isPlayerReady) return;
     if (youtubePlayer.isMuted?.()) {
       youtubePlayer.unMute?.();
-      muteBtn.textContent = "Mute";
+      setMuteButtonState(false);
       if (volumeInput && Number(volumeInput.value) === 0) {
         volumeInput.value = "80";
         youtubePlayer.setVolume?.(80);
+        updateRangeProgress(volumeInput);
       }
     } else {
       youtubePlayer.mute?.();
-      muteBtn.textContent = "Unmute";
+      setMuteButtonState(true);
     }
   });
 
@@ -1735,9 +2445,45 @@ const setupPlayerControls = () => {
     togglePlayerFullscreen();
   });
 
+  playerStage?.addEventListener("pointermove", () => {
+    showPlayerControls();
+  });
+  playerStage?.addEventListener(
+    "touchstart",
+    () => {
+      showPlayerControls();
+    },
+    { passive: true },
+  );
+  playerStage?.addEventListener("mouseleave", () => {
+    schedulePlayerControlsHide();
+  });
+  hoverCapture?.addEventListener("pointermove", () => {
+    showPlayerControls();
+  });
+  hoverCapture?.addEventListener("click", () => {
+    showPlayerControls();
+  });
+
+  controlsPanel?.addEventListener("pointerenter", () => {
+    isPointerOverPlayerControls = true;
+    showPlayerControls({ scheduleHide: false });
+  });
+  controlsPanel?.addEventListener("pointerleave", () => {
+    isPointerOverPlayerControls = false;
+    schedulePlayerControlsHide();
+  });
+  controlsPanel?.addEventListener("focusin", () => {
+    showPlayerControls({ scheduleHide: false });
+  });
+  controlsPanel?.addEventListener("focusout", () => {
+    schedulePlayerControlsHide();
+  });
+
   document.addEventListener("fullscreenchange", setFullscreenButtonState);
   document.addEventListener("webkitfullscreenchange", setFullscreenButtonState);
   setFullscreenButtonState();
+  setMuteButtonState(false);
 };
 
 const setupPlayer = () => {
@@ -1762,6 +2508,27 @@ const setupPlayer = () => {
   document
     .getElementById("mode-audio")
     ?.addEventListener("click", () => setPlayerMode("audio"));
+  document
+    .getElementById("player-desc-toggle")
+    ?.addEventListener("click", () => {
+      const toggle = document.getElementById("player-desc-toggle");
+      setDescriptionExpanded(toggle?.getAttribute("aria-expanded") !== "true");
+    });
+  document
+    .getElementById("player-desc-toggle")
+    ?.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      const toggle = document.getElementById("player-desc-toggle");
+      setDescriptionExpanded(toggle?.getAttribute("aria-expanded") !== "true");
+    });
+  document
+    .getElementById("episode-save-btn")
+    ?.addEventListener("click", toggleCurrentEpisodeSaved);
+  document
+    .getElementById("episode-share-btn")
+    ?.addEventListener("click", shareCurrentEpisode);
+  setupEpisodeTabs();
   setupPlayerControls();
   setupComments();
 
@@ -1898,32 +2665,21 @@ const openPlayer = (episode) => {
 
   // Update Content
   document.getElementById("player-title").textContent = episode.title;
-  document.getElementById("player-desc").textContent = formatEpisodeDescription(
-    episode.description,
-  );
+  document.getElementById("player-desc-text").textContent =
+    formatEpisodeDescription(episode.description);
+  updateDescriptionToggleState();
+  updateEpisodeSaveButton();
+  updateEpisodeForumLinks(episode);
+  setEpisodeActionStatus("");
+  setEpisodePanel("comments");
   document.getElementById("player-date").textContent = formatDate(
     episode.publishedAt,
   );
-  const currentEpisodeIndex = episodes.findIndex(
-    (item) => item.videoId === episode.videoId,
-  );
+  const displayNumber = getEpisodeDisplayNumberForEpisode(episode);
   document.getElementById("player-episode-num").textContent =
-    currentEpisodeIndex >= 0 ?
-      `EP ${String(getEpisodeDisplayNumber(currentEpisodeIndex)).padStart(2, "0")}`
-    : "EP --";
+    displayNumber ? `EP ${String(displayNumber).padStart(2, "0")}` : "EP --";
 
-  const episodeCover =
-    episode.thumbnails?.maxres?.url ||
-    episode.thumbnails?.high?.url ||
-    episode.thumbnails?.medium?.url ||
-    (episode.videoId ?
-      `https://img.youtube.com/vi/${episode.videoId}/hqdefault.jpg`
-    : "../images/logo-light.webp");
-  const coverEl = document.getElementById("audio-cover");
-  if (coverEl) {
-    coverEl.src = episodeCover;
-    coverEl.alt = `Copertă ${episode.title}`;
-  }
+  updateAudioCoverArt(episode);
 
   pendingSeekTime = getPlaybackPosition(episode.videoId);
   seekHoldTargetSeconds = pendingSeekTime || 0;
@@ -1939,6 +2695,7 @@ const openPlayer = (episode) => {
   }
 
   setPlayerMode("video");
+  showPlayerControls({ scheduleHide: false });
   updatePlayButtonState(false);
   document.getElementById("close-player")?.focus();
 
@@ -1947,6 +2704,7 @@ const openPlayer = (episode) => {
 
   setupComments().then(() => {
     loadEpisodeComments(episode.videoId);
+    loadEpisodeForumThreads(episode.videoId);
   });
 
   loadYoutubeVideo(episode.videoId);
@@ -1976,12 +2734,26 @@ const closePlayer = () => {
   optimisticTimelineSeconds = null;
   optimisticTimelineLastTick = 0;
   activeCommentsRequestId += 1;
+  activeEpisodeForumRequestId += 1;
   commentsById.clear();
 
   const { list, count } = getCommentsElements();
   if (list) list.innerHTML = "";
   if (count) count.textContent = "0";
   setCommentsStatus("");
+
+  const forumElements = getEpisodeForumElements();
+  if (forumElements.list) forumElements.list.innerHTML = "";
+  if (forumElements.count) forumElements.count.textContent = "0";
+  if (forumElements.openLink) forumElements.openLink.hidden = true;
+  setEpisodeForumStatus("");
+  setEpisodeActionStatus("");
+  setDescriptionExpanded(false);
+  clearPlayerControlsHideTimer();
+  setPlayerCursorHidden(false);
+  document.getElementById("player-stage")?.classList.remove("controls-hidden");
+  window.clearTimeout(episodeActionStatusTimeout);
+  episodeActionStatusTimeout = 0;
 
   // Stop Video
   if (youtubePlayer && youtubePlayer.stopVideo) {
@@ -2132,6 +2904,8 @@ const setPlayerMode = (mode) => {
     btnVideo.setAttribute("aria-pressed", "true");
     btnAudio.setAttribute("aria-pressed", "false");
   }
+
+  showPlayerControls({ scheduleHide: mode === "video" });
 };
 
 const onPlayerStateChange = (event) => {
@@ -2141,6 +2915,7 @@ const onPlayerStateChange = (event) => {
     updatePlayButtonState(true);
     startTimelineSync();
     applyBestVideoQuality();
+    showPlayerControls();
     if (
       optimisticTimelineSeconds !== null &&
       optimisticTimelineLastTick === 0
@@ -2153,6 +2928,8 @@ const onPlayerStateChange = (event) => {
     }
   } else {
     updatePlayButtonState(false);
+    showPlayerControls({ scheduleHide: false });
+    clearPlayerControlsHideTimer();
   }
 
   if (

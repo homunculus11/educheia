@@ -85,6 +85,8 @@ const refs = {
   threadAuthorName: document.getElementById("thread-author-name"),
   threadCreatedAt: document.getElementById("thread-created-at"),
   threadCategory: document.getElementById("thread-category"),
+  threadEpisodeWrap: document.getElementById("thread-episode-wrap"),
+  threadEpisode: document.getElementById("thread-episode"),
   threadRepliesCount: document.getElementById("thread-replies-count"),
   threadSummaryBadges: document.getElementById("thread-summary-badges"),
   threadLastActivity: document.getElementById("thread-last-activity"),
@@ -161,6 +163,12 @@ const toTrimmedString = (value) =>
   String(value ?? "")
     .replace(/\s+/g, " ")
     .trim();
+
+const normalizeEpisodeId = (value) => {
+  const normalized = toTrimmedString(value);
+  if (!normalized || normalized.length > 128) return "";
+  return normalized;
+};
 
 const normalizePath = (value) => String(value || "").replace(/\/+$/, "");
 
@@ -903,6 +911,7 @@ const mapThreadDoc = (docSnap) => {
     body: toTrimmedString(data.body),
     categoryId: toTrimmedString(data.categoryId),
     categoryType: data.categoryType === "admin" ? "admin" : "normal",
+    episodeId: normalizeEpisodeId(data.episodeId),
     authorUid: toTrimmedString(data.authorUid),
     authorName: toTrimmedString(data.authorName) || "Membru",
     authorEmail: toTrimmedString(data.authorEmail),
@@ -1121,6 +1130,8 @@ const renderThreadBadges = () => {
     badges.push({ text: "blocată", className: "forum-pill" });
   if (state.thread.authorIsAdmin)
     badges.push({ text: "echipă", className: "forum-pill forum-pill-admin" });
+  if (state.thread.episodeId)
+    badges.push({ text: "episod", className: "forum-pill forum-pill-episode" });
   if (state.thread.moderationStatus !== "visible") {
     badges.push({
       text: `status: ${state.thread.moderationStatus}`,
@@ -1275,6 +1286,18 @@ const renderThreadSummary = () => {
   }
   if (refs.threadCategory) {
     refs.threadCategory.textContent = getThreadCategoryLabel(state.thread);
+  }
+  if (refs.threadEpisodeWrap && refs.threadEpisode) {
+    refs.threadEpisodeWrap.hidden = !state.thread.episodeId;
+    clearNode(refs.threadEpisode);
+    if (state.thread.episodeId) {
+      const episodeLink = document.createElement("a");
+      episodeLink.href = `/episodes#${encodeURIComponent(state.thread.episodeId)}`;
+      episodeLink.textContent = "Deschide episodul";
+      refs.threadEpisode.appendChild(episodeLink);
+    } else {
+      refs.threadEpisode.textContent = "-";
+    }
   }
   if (refs.threadRepliesCount) {
     refs.threadRepliesCount.textContent = String(

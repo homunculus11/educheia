@@ -50,9 +50,12 @@ const state = {
   categories: [],
   categoriesById: new Map(),
   stickyThreads: [],
+  episodeThreads: [],
   feedThreads: [],
   activeCategory: "all",
   stickyCategory: "all-admin",
+  activeEpisodeId: "",
+  activeEpisodeTitle: "",
   activeSort: "activity",
   searchTerm: "",
   composerCategoryScope: "all",
@@ -62,8 +65,11 @@ const state = {
   hasMoreFeed: true,
   isLoadingFeed: false,
   isLoadingSticky: false,
+  isLoadingEpisodeThreads: false,
   stickyLoadFailed: false,
+  episodeThreadsLoadFailed: false,
   feedRequestId: 0,
+  episodeThreadsRequestId: 0,
   authUser: null,
   authClaims: {},
   currentUserRoleData: null,
@@ -83,7 +89,10 @@ const state = {
   backToTopHideTimeoutId: 0,
   revealedFeedThreadIds: new Set(),
   revealedStickyThreadIds: new Set(),
+  revealedEpisodeThreadIds: new Set(),
   revealedAdminThreadIds: new Set(),
+  isAuthResolved: false,
+  shouldAutoOpenThreadComposer: false,
 };
 
 const refs = {
@@ -96,6 +105,16 @@ const refs = {
   stickyList: document.getElementById("sticky-list"),
   stickyEmpty: document.getElementById("sticky-empty"),
   stickyCategoryChips: document.getElementById("forum-sticky-category-chips"),
+
+  episodeSection: document.getElementById("forum-episode-section"),
+  episodeTitle: document.getElementById("forum-episode-title"),
+  episodeSubtitle: document.getElementById("forum-episode-subtitle"),
+  episodeNewThread: document.getElementById("forum-episode-new-thread"),
+  episodeClear: document.getElementById("forum-episode-clear"),
+  episodeThreadsLoading: document.getElementById("episode-threads-loading"),
+  episodeThreadsEmpty: document.getElementById("episode-threads-empty"),
+  episodeThreadsList: document.getElementById("episode-threads-list"),
+  episodeThreadsFeedback: document.getElementById("episode-threads-feedback"),
 
   feedStatus: document.getElementById("feed-status-inline"),
   feedLoading: document.getElementById("feed-loading"),
@@ -117,6 +136,10 @@ const refs = {
   threadForm: document.getElementById("thread-form"),
   threadTitle: document.getElementById("thread-title"),
   threadCategory: document.getElementById("thread-category"),
+  threadEpisodeContext: document.getElementById("thread-episode-context"),
+  threadEpisodeContextLabel: document.getElementById(
+    "thread-episode-context-label",
+  ),
   threadStickyWrap: document.getElementById("thread-sticky-wrap"),
   threadIsSticky: document.getElementById("thread-is-sticky"),
   threadStickyHint: document.getElementById("thread-sticky-hint"),
@@ -147,6 +170,21 @@ const toTrimmedString = (value) =>
     .replace(/\s+/g, " ")
     .trim();
 const VALID_FORUM_ROLES = new Set(["member", "moderator", "admin"]);
+
+const normalizeEpisodeId = (value) => {
+  const normalized = toTrimmedString(value);
+  if (!normalized || normalized.length > 128) return "";
+  return normalized;
+};
+
+const readInitialEpisodeFilter = () => {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    episodeId: normalizeEpisodeId(params.get("episode")),
+    episodeTitle: toTrimmedString(params.get("episodeTitle")).slice(0, 180),
+    shouldAutoOpen: params.get("new") === "1",
+  };
+};
 
 const normalizeForumRole = (value) => {
   const role = toTrimmedString(value).toLowerCase();
@@ -352,6 +390,7 @@ const mapThreadDoc = (docSnap) => {
     body: toTrimmedString(data.body),
     categoryId: toTrimmedString(data.categoryId),
     categoryType: data.categoryType === "admin" ? "admin" : "normal",
+    episodeId: normalizeEpisodeId(data.episodeId),
     authorUid: toTrimmedString(data.authorUid),
     authorName: toTrimmedString(data.authorName) || "Membru",
     authorIsAdmin: Boolean(data.authorIsAdmin),
@@ -377,7 +416,7 @@ const getThreadCategoryLabel = (thread) => {
 
 const buildThreadSearchText = (thread) => {
   const categoryLabel = getThreadCategoryLabel(thread);
-  return [thread.title, thread.body, thread.authorName, categoryLabel]
+  return [thread.title, thread.body, thread.authorName, categoryLabel, thread.episodeId]
     .join(" ")
     .toLowerCase();
 };
@@ -719,6 +758,13 @@ const renderThreadList = (listRef, threads, { revealedIds = null } = {}) => {
     categoryPill.textContent = getThreadCategoryLabel(thread);
     meta.appendChild(categoryPill);
 
+    if (thread.episodeId) {
+      const episodePill = document.createElement("span");
+      episodePill.className = "forum-pill forum-pill-episode";
+      episodePill.textContent = "Episod";
+      meta.appendChild(episodePill);
+    }
+
     if (thread.isSticky) {
       const stickyPill = document.createElement("span");
       stickyPill.className = "forum-pill forum-pill-sticky";
@@ -792,6 +838,62 @@ const renderStickySection = () => {
 
   renderThreadList(refs.stickyList, visibleSticky, {
     revealedIds: state.revealedStickyThreadIds,
+  });
+};
+
+const setEpisodeThreadsFeedback = (text = "", type = "") => {
+  if (!refs.episodeThreadsFeedback) return;
+
+  refs.episodeThreadsFeedback.textContent = text;
+  refs.episodeThreadsFeedback.classList.remove("is-error", "is-success");
+
+  if (type === "error") refs.episodeThreadsFeedback.classList.add("is-error");
+  if (type === "success")
+    refs.episodeThreadsFeedback.classList.add("is-success");
+};
+
+const getEpisodeFilterLabel = () =>
+  state.activeEpisodeTitle || `Episod ${state.activeEpisodeId}`;
+
+const renderEpisodeSection = () => {
+  if (
+    !refs.episodeSection ||
+    !refs.episodeThreadsLoading ||
+    !refs.episodeThreadsEmpty ||
+    !refs.episodeThreadsList
+  ) {
+    return;
+  }
+
+  const hasEpisodeFilter = Boolean(state.activeEpisodeId);
+  refs.episodeSection.hidden = !hasEpisodeFilter;
+
+  if (!hasEpisodeFilter) {
+    clearNode(refs.episodeThreadsList);
+    refs.episodeThreadsLoading.hidden = true;
+    refs.episodeThreadsEmpty.hidden = true;
+    setEpisodeThreadsFeedback("");
+    return;
+  }
+
+  const episodeLabel = getEpisodeFilterLabel();
+  if (refs.episodeTitle) {
+    refs.episodeTitle.textContent = "Discuții pentru episod";
+  }
+  if (refs.episodeSubtitle) {
+    refs.episodeSubtitle.textContent = `${episodeLabel} · thread-uri conectate direct cu episodul selectat.`;
+  }
+
+  refs.episodeThreadsLoading.hidden = !state.isLoadingEpisodeThreads;
+
+  const isEmpty =
+    !state.isLoadingEpisodeThreads &&
+    !state.episodeThreadsLoadFailed &&
+    state.episodeThreads.length === 0;
+  refs.episodeThreadsEmpty.hidden = !isEmpty;
+
+  renderThreadList(refs.episodeThreadsList, state.episodeThreads, {
+    revealedIds: state.revealedEpisodeThreadIds,
   });
 };
 
@@ -1027,6 +1129,74 @@ const loadStickyThreads = async () => {
     state.isLoadingSticky = false;
     renderStickySection();
     updateAuxPanels();
+  }
+};
+
+const loadEpisodeThreads = async () => {
+  if (!state.activeEpisodeId) {
+    state.episodeThreads = [];
+    state.episodeThreadsLoadFailed = false;
+    state.isLoadingEpisodeThreads = false;
+    renderEpisodeSection();
+    return;
+  }
+
+  const requestId = ++state.episodeThreadsRequestId;
+  state.isLoadingEpisodeThreads = true;
+  state.episodeThreadsLoadFailed = false;
+  state.revealedEpisodeThreadIds.clear();
+  setEpisodeThreadsFeedback("");
+  renderEpisodeSection();
+
+  const threadsRef = collection(db, THREADS_COLLECTION);
+
+  try {
+    const episodeQuery = query(
+      threadsRef,
+      where("episodeId", "==", state.activeEpisodeId),
+      where("moderationStatus", "==", "visible"),
+      orderBy("lastActivityAt", "desc"),
+      limit(12),
+    );
+
+    const snapshot = await getDocs(episodeQuery);
+    if (requestId !== state.episodeThreadsRequestId) return;
+    state.episodeThreads = snapshot.docs.map(mapThreadDoc);
+  } catch (error) {
+    try {
+      const fallbackSnapshot = await getDocs(
+        query(
+          threadsRef,
+          where("episodeId", "==", state.activeEpisodeId),
+          where("moderationStatus", "==", "visible"),
+          limit(30),
+        ),
+      );
+
+      if (requestId !== state.episodeThreadsRequestId) return;
+      state.episodeThreads = fallbackSnapshot.docs
+        .map(mapThreadDoc)
+        .sort(
+          (a, b) =>
+            getThreadTimestamp(b.lastActivityAt || b.createdAt) -
+            getThreadTimestamp(a.lastActivityAt || a.createdAt),
+        )
+        .slice(0, 12);
+    } catch {
+      if (requestId !== state.episodeThreadsRequestId) return;
+      state.episodeThreads = [];
+      state.episodeThreadsLoadFailed = true;
+      setEpisodeThreadsFeedback(
+        describeError(error, "Nu am putut încărca thread-urile episodului."),
+        "error",
+      );
+    }
+  } finally {
+    if (requestId === state.episodeThreadsRequestId) {
+      state.isLoadingEpisodeThreads = false;
+      renderEpisodeSection();
+      updateAuxPanels();
+    }
   }
 };
 
@@ -1314,6 +1484,15 @@ const updateThreadStickyModeState = () => {
 const setComposerCategoryScope = (scope, { preferredValue = null } = {}) => {
   populateThreadCategorySelect({ scope, preferredValue });
   updateThreadStickyModeState();
+};
+
+const updateThreadEpisodeContext = () => {
+  if (!refs.threadEpisodeContext || !refs.threadEpisodeContextLabel) return;
+
+  const hasEpisode = Boolean(state.activeEpisodeId);
+  refs.threadEpisodeContext.hidden = !hasEpisode;
+  refs.threadEpisodeContextLabel.textContent =
+    hasEpisode ? getEpisodeFilterLabel() : "Episod selectat";
 };
 
 const updateCreateUiState = () => {
@@ -1604,6 +1783,7 @@ const updateAdminThreadModerationStatus = async (threadId, status) => {
       loadAdminModerationThreads(),
       loadStickyThreads(),
       loadFeedPage({ reset: true }),
+      loadEpisodeThreads(),
     ]);
   } catch (error) {
     setAdminThreadsFeedback(
@@ -1628,6 +1808,7 @@ const deleteAdminModeratedThread = async (threadId) => {
       loadAdminModerationThreads(),
       loadStickyThreads(),
       loadFeedPage({ reset: true }),
+      loadEpisodeThreads(),
     ]);
   } catch (error) {
     setAdminThreadsFeedback(
@@ -1763,6 +1944,7 @@ const openThreadModal = () => {
   } else {
     setComposerCategoryScope("normal", { preferredValue: "" });
   }
+  updateThreadEpisodeContext();
 
   clearModalCloseTimeout();
   state.isModalOpen = true;
@@ -1903,14 +2085,21 @@ const submitThread = async () => {
       payload.authorEmail = toTrimmedString(user.email);
     }
 
+    if (state.activeEpisodeId) {
+      payload.episodeId = state.activeEpisodeId;
+    }
+
     await addDoc(collection(db, THREADS_COLLECTION), payload);
 
     resetThreadForm();
     closeThreadModal();
     renderFeedStatus("Subiect publicat cu succes. Se actualizează lista...");
 
-    await loadStickyThreads();
-    await loadFeedPage({ reset: true });
+    await Promise.all([
+      loadStickyThreads(),
+      loadFeedPage({ reset: true }),
+      loadEpisodeThreads(),
+    ]);
   } catch (error) {
     if (error?.code === "permission-denied") {
       if (state.threadPostingRestriction) {
@@ -2283,6 +2472,41 @@ const onSortChange = async () => {
   await loadFeedPage({ reset: true });
 };
 
+const syncEpisodeFilterToUrl = () => {
+  const url = new URL(window.location.href);
+  if (state.activeEpisodeId) {
+    url.searchParams.set("episode", state.activeEpisodeId);
+    if (state.activeEpisodeTitle) {
+      url.searchParams.set("episodeTitle", state.activeEpisodeTitle);
+    } else {
+      url.searchParams.delete("episodeTitle");
+    }
+  } else {
+    url.searchParams.delete("episode");
+    url.searchParams.delete("episodeTitle");
+  }
+  url.searchParams.delete("new");
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+};
+
+const clearEpisodeFilter = async () => {
+  state.activeEpisodeId = "";
+  state.activeEpisodeTitle = "";
+  state.episodeThreads = [];
+  state.episodeThreadsLoadFailed = false;
+  state.revealedEpisodeThreadIds.clear();
+  state.episodeThreadsRequestId += 1;
+  syncEpisodeFilterToUrl();
+  updateThreadEpisodeContext();
+  renderEpisodeSection();
+};
+
+const maybeAutoOpenThreadModal = () => {
+  if (!state.shouldAutoOpenThreadComposer || !state.isAuthResolved) return;
+  state.shouldAutoOpenThreadComposer = false;
+  openThreadModal();
+};
+
 const loadCurrentUserRoleData = async (user) => {
   if (!user) return null;
 
@@ -2326,6 +2550,7 @@ const resolveCurrentUserForumRole = async (
 const initAuth = () => {
   onAuthStateChanged(auth, async (user) => {
     state.authUser = user;
+    state.isAuthResolved = false;
     state.authClaims = {};
     state.currentUserRoleData = null;
     state.forumRole = "member";
@@ -2365,6 +2590,7 @@ const initAuth = () => {
     });
     renderStickyCategoryChips();
     updateCreateUiState();
+    updateThreadEpisodeContext();
     updateAdminToolsVisibility();
 
     if (!state.isAdmin) {
@@ -2374,12 +2600,17 @@ const initAuth = () => {
       state.adminModerationRequestId++;
       renderAdminModerationThreads();
       setAdminThreadsFeedback("");
+      state.isAuthResolved = true;
+      maybeAutoOpenThreadModal();
       return;
     }
 
     if (refs.adminModerationPanel?.open && !state.hasLoadedAdminModeration) {
       await loadAdminModerationThreads();
     }
+
+    state.isAuthResolved = true;
+    maybeAutoOpenThreadModal();
   });
 };
 
@@ -2415,6 +2646,10 @@ const bindEvents = () => {
     "click",
     onStickyCategoryChipClick,
   );
+  refs.episodeNewThread?.addEventListener("click", openThreadModal);
+  refs.episodeClear?.addEventListener("click", async () => {
+    await clearEpisodeFilter();
+  });
   refs.adminThreadFilterChips?.addEventListener("click", async (event) => {
     await onAdminThreadFilterClick(event);
   });
@@ -2456,6 +2691,12 @@ const bindEvents = () => {
 };
 
 const init = async () => {
+  const initialEpisodeFilter = readInitialEpisodeFilter();
+  state.activeEpisodeId = initialEpisodeFilter.episodeId;
+  state.activeEpisodeTitle = initialEpisodeFilter.episodeTitle;
+  state.shouldAutoOpenThreadComposer =
+    initialEpisodeFilter.shouldAutoOpen && Boolean(state.activeEpisodeId);
+
   const eventsBound = bindEvents();
   if (!eventsBound) {
     showFeedError(
@@ -2495,10 +2736,17 @@ const init = async () => {
   setComposerCategoryScope(state.composerCategoryScope, {
     preferredValue: refs.threadCategory.value,
   });
+  updateThreadEpisodeContext();
   updateCreateUiState();
+  renderEpisodeSection();
   renderAdminModerationThreads();
 
-  await Promise.all([loadStickyThreads(), loadFeedPage({ reset: true })]);
+  await Promise.all([
+    loadStickyThreads(),
+    loadFeedPage({ reset: true }),
+    loadEpisodeThreads(),
+  ]);
+  maybeAutoOpenThreadModal();
 };
 
 init().catch((error) => {

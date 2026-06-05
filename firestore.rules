@@ -260,6 +260,23 @@ service cloud.firestore {
         && categoryMatchesType(request.resource.data.categoryId, request.resource.data.categoryType);
     }
 
+    function validOptionalThreadEpisodeField() {
+      return !('episodeId' in request.resource.data)
+        || isNonEmptyStringMax(request.resource.data.episodeId, 128);
+    }
+
+    function threadEpisodeFieldUnchanged() {
+      return (
+          !('episodeId' in resource.data)
+          && !('episodeId' in request.resource.data)
+        )
+        || (
+          ('episodeId' in resource.data)
+          && ('episodeId' in request.resource.data)
+          && request.resource.data.episodeId == resource.data.episodeId
+        );
+    }
+
     function threadAuthorIdentityUnchanged() {
       return request.resource.data.authorUid == resource.data.authorUid
         && request.resource.data.authorName == resource.data.authorName
@@ -271,6 +288,7 @@ service cloud.firestore {
     function threadOwnerImmutableFieldsUnchanged() {
       return request.resource.data.categoryId == resource.data.categoryId
         && request.resource.data.categoryType == resource.data.categoryType
+        && threadEpisodeFieldUnchanged()
         && request.resource.data.isSticky == resource.data.isSticky
         && request.resource.data.isLocked == resource.data.isLocked
         && request.resource.data.moderationStatus == resource.data.moderationStatus
@@ -330,6 +348,7 @@ service cloud.firestore {
           'body',
           'categoryId',
           'categoryType',
+          'episodeId',
           'authorUid',
           'authorName',
           'authorEmail',
@@ -360,6 +379,7 @@ service cloud.firestore {
         ])
         && validThreadTextFields()
         && validThreadCategoryFields()
+        && validOptionalThreadEpisodeField()
         && validAuthorIdentityForCreate()
         && request.resource.data.isSticky is bool
         && (!request.resource.data.isSticky || isAdmin())

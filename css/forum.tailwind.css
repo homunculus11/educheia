@@ -161,6 +161,14 @@ h4 {
   @apply flex flex-wrap items-start justify-between gap-2;
 }
 
+.forum-episode-kicker {
+  @apply mb-1 text-[0.72rem] font-bold uppercase tracking-[0.16em] text-[#74d3df];
+}
+
+.forum-episode-actions {
+  @apply flex flex-wrap items-center justify-end gap-2;
+}
+
 .forum-feed-status {
   @apply min-h-[22px] text-sm text-[#a8b9d2];
 }
@@ -337,6 +345,12 @@ h4 {
   border-color: rgba(188, 155, 104, 0.66);
   background: rgba(113, 88, 48, 0.28);
   color: #f8e7bb;
+}
+
+.forum-pill-episode {
+  border-color: rgba(116, 211, 223, 0.62);
+  background: rgba(61, 129, 148, 0.24);
+  color: #dffbff;
 }
 
 .forum-thread-stats {
@@ -577,6 +591,18 @@ h4 {
 
 .forum-sticky-toggle {
   @apply rounded-xl border border-[#8ca9c444] bg-[#1a2b4791] px-3 py-2;
+}
+
+.forum-episode-context {
+  @apply rounded-xl border border-[#74d3df52] bg-[#12314aa8] px-3 py-2 text-[0.84rem] text-[#c7d9ee];
+}
+
+.forum-episode-context span {
+  @apply mb-1 block text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[#74d3df];
+}
+
+.forum-episode-context strong {
+  @apply block text-[#f3f8ff];
 }
 
 .forum-sticky-label {
