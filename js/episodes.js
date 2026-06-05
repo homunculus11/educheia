@@ -1072,12 +1072,17 @@ const buildEpisodePageUrl = (episode) => {
   return url.href;
 };
 
+const getEpisodeForumTitle = (episode) =>
+  String(episode?.title || "")
+    .replace(/\s*\|\s*Educheia cu Elena Vorotneac\s*$/i, "")
+    .trim();
+
 const buildEpisodeForumUrl = (episode, { newThread = false } = {}) => {
   const url = new URL("/forum", window.location.origin);
   if (episode?.videoId) {
     url.searchParams.set("episode", episode.videoId);
   }
-  const title = String(episode?.title || "").trim();
+  const title = getEpisodeForumTitle(episode);
   if (title) {
     url.searchParams.set("episodeTitle", title.slice(0, 180));
   }

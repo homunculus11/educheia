@@ -293,6 +293,9 @@ service cloud.firestore {
         && request.resource.data.isLocked == resource.data.isLocked
         && request.resource.data.moderationStatus == resource.data.moderationStatus
         && request.resource.data.commentCount == resource.data.commentCount
+        && request.resource.data.contributorStats == resource.data.contributorStats
+        && request.resource.data.topContributors == resource.data.topContributors
+        && request.resource.data.uniqueResponderCount == resource.data.uniqueResponderCount
         && request.resource.data.lastActivityAt == resource.data.lastActivityAt;
     }
 
@@ -342,6 +345,23 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
+    function validThreadContributorCreateFields() {
+      return request.resource.data.contributorStats is map
+        && request.resource.data.contributorStats.keys().size() == 0
+        && request.resource.data.topContributors is list
+        && request.resource.data.topContributors.size() == 0
+        && request.resource.data.uniqueResponderCount is number
+        && request.resource.data.uniqueResponderCount == 0;
+    }
+
+    function validThreadContributorSyncFields() {
+      return request.resource.data.contributorStats is map
+        && request.resource.data.topContributors is list
+        && request.resource.data.topContributors.size() <= 2
+        && request.resource.data.uniqueResponderCount is number
+        && request.resource.data.uniqueResponderCount >= 0;
+    }
+
     function validForumThreadCreatePayload() {
       return request.resource.data.keys().hasOnly([
           'title',
@@ -357,6 +377,9 @@ service cloud.firestore {
           'isLocked',
           'moderationStatus',
           'commentCount',
+          'contributorStats',
+          'topContributors',
+          'uniqueResponderCount',
           'createdAt',
           'updatedAt',
           'lastActivityAt'
@@ -373,6 +396,9 @@ service cloud.firestore {
           'isLocked',
           'moderationStatus',
           'commentCount',
+          'contributorStats',
+          'topContributors',
+          'uniqueResponderCount',
           'createdAt',
           'updatedAt',
           'lastActivityAt'
@@ -388,6 +414,7 @@ service cloud.firestore {
         && (isAdmin() || request.resource.data.moderationStatus != 'hidden')
         && request.resource.data.commentCount is number
         && request.resource.data.commentCount == 0
+        && validThreadContributorCreateFields()
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && request.resource.data.lastActivityAt == request.time;
@@ -451,6 +478,9 @@ service cloud.firestore {
     function validForumThreadCounterSyncUpdate() {
       return request.resource.data.diff(resource.data).changedKeys().hasOnly([
           'commentCount',
+          'contributorStats',
+          'topContributors',
+          'uniqueResponderCount',
           'updatedAt',
           'lastActivityAt'
         ])
@@ -475,6 +505,7 @@ service cloud.firestore {
             && request.resource.data.commentCount >= 0
           )
         )
+        && validThreadContributorSyncFields()
         && request.resource.data.updatedAt == request.time
         && request.resource.data.lastActivityAt == request.time
         && canReadModeratedDoc(resource.data);

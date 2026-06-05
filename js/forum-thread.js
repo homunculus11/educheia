@@ -150,7 +150,9 @@ const refs = {
   ogDescription: document.getElementById("thread-og-description"),
   ogUrl: document.getElementById("thread-og-url"),
   ogUpdatedTime: document.getElementById("thread-og-updated-time"),
-  articlePublishedTime: document.getElementById("thread-article-published-time"),
+  articlePublishedTime: document.getElementById(
+    "thread-article-published-time",
+  ),
   articleModifiedTime: document.getElementById("thread-article-modified-time"),
   twitterTitle: document.getElementById("thread-twitter-title"),
   twitterDescription: document.getElementById("thread-twitter-description"),
@@ -430,6 +432,17 @@ const ICON_SVG_MARKUP = {
     '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2-icon lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
 };
 
+const THREAD_PILL_ICON_MARKUP = {
+  episode:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clapperboard-icon lucide-clapperboard"><path d="m12.296 3.464 3.02 3.956"/><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3z"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="m6.18 5.276 3.1 3.899"/></svg>',
+  sticky:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pin-icon lucide-pin"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>',
+  admin:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users-icon lucide-users"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg>',
+  locked:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lock-icon lucide-lock"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+};
+
 const createActionIcon = (iconName) => {
   const template = document.createElement("template");
   template.innerHTML = (
@@ -440,6 +453,35 @@ const createActionIcon = (iconName) => {
   node.classList.add("forum-icon-action-svg");
   node.setAttribute("aria-hidden", "true");
   return node;
+};
+
+const createThreadPillIcon = (iconName) => {
+  const template = document.createElement("template");
+  template.innerHTML = (
+    THREAD_PILL_ICON_MARKUP[iconName] || THREAD_PILL_ICON_MARKUP.episode
+  ).trim();
+  const node = template.content.firstElementChild;
+  if (!(node instanceof SVGElement)) return null;
+  node.classList.add("forum-thread-pill-icon");
+  node.setAttribute("aria-hidden", "true");
+  return node;
+};
+
+const createThreadPill = (className, iconName, text) => {
+  const pill = document.createElement("span");
+  pill.className = className;
+
+  const icon = createThreadPillIcon(iconName);
+  if (icon) {
+    pill.appendChild(icon);
+  }
+
+  const label = document.createElement("span");
+  label.className = "forum-thread-pill-label";
+  label.textContent = text;
+  pill.appendChild(label);
+
+  return pill;
 };
 
 const buildIconAction = ({
@@ -851,7 +893,8 @@ const updateMetaTags = (thread, canonicalPath) => {
   const publishedIso = toIsoDateTime(thread?.createdAt);
   const modifiedIso =
     toIsoDateTime(thread?.updatedAt) || toIsoDateTime(thread?.lastActivityAt);
-  const isIndexableThread = toTrimmedString(thread?.moderationStatus) === "visible";
+  const isIndexableThread =
+    toTrimmedString(thread?.moderationStatus) === "visible";
 
   document.title = `${title} | Forum Educheia`;
 
@@ -874,7 +917,10 @@ const updateMetaTags = (thread, canonicalPath) => {
   if (refs.articlePublishedTime)
     refs.articlePublishedTime.setAttribute("content", publishedIso);
   if (refs.articleModifiedTime)
-    refs.articleModifiedTime.setAttribute("content", modifiedIso || publishedIso);
+    refs.articleModifiedTime.setAttribute(
+      "content",
+      modifiedIso || publishedIso,
+    );
 
   setRobotsDirective(
     isIndexableThread ? ROBOTS_INDEX_DIRECTIVE : ROBOTS_NOINDEX_DIRECTIVE,
@@ -939,6 +985,99 @@ const mapReplyDoc = (docSnap) => {
     moderationStatus: toTrimmedString(data.moderationStatus) || "visible",
     createdAt: toDateOrNull(data.createdAt),
     updatedAt: toDateOrNull(data.updatedAt),
+  };
+};
+
+const normalizeContributorStats = (rawStats) => {
+  const stats = new Map();
+  if (!rawStats || typeof rawStats !== "object" || Array.isArray(rawStats)) {
+    return stats;
+  }
+
+  Object.entries(rawStats).forEach(([rawUid, rawValue]) => {
+    const uid = toTrimmedString(rawValue?.uid || rawUid);
+    const count = safeInt(rawValue?.count, 0);
+    if (!uid || count <= 0) return;
+
+    stats.set(uid, {
+      uid,
+      name: toTrimmedString(rawValue?.name) || "Membru",
+      count,
+      isAdmin: Boolean(rawValue?.isAdmin),
+    });
+  });
+
+  return stats;
+};
+
+const serializeContributorStats = (stats) => {
+  const payload = {};
+  [...stats.values()].forEach((contributor) => {
+    payload[contributor.uid] = {
+      uid: contributor.uid,
+      name: contributor.name,
+      count: contributor.count,
+      isAdmin: Boolean(contributor.isAdmin),
+    };
+  });
+  return payload;
+};
+
+const getTopContributors = (stats) =>
+  [...stats.values()]
+    .filter((contributor) => contributor.count > 0)
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name, "ro");
+    })
+    .slice(0, 2)
+    .map((contributor) => ({
+      uid: contributor.uid,
+      name: contributor.name,
+      count: contributor.count,
+      isAdmin: Boolean(contributor.isAdmin),
+    }));
+
+const buildContributorThreadUpdate = (
+  currentThread,
+  { uid, name, isAdmin, delta },
+) => {
+  const normalizedUid = toTrimmedString(uid);
+  if (!normalizedUid) {
+    return {
+      contributorStats: currentThread?.contributorStats || {},
+      topContributors:
+        Array.isArray(currentThread?.topContributors) ?
+          currentThread.topContributors
+        : [],
+      uniqueResponderCount: safeInt(currentThread?.uniqueResponderCount, 0),
+    };
+  }
+
+  const stats = normalizeContributorStats(currentThread?.contributorStats);
+  const existing = stats.get(normalizedUid) || {
+    uid: normalizedUid,
+    name: toTrimmedString(name) || "Membru",
+    count: 0,
+    isAdmin: Boolean(isAdmin),
+  };
+
+  const nextCount = Math.max(0, safeInt(existing.count, 0) + delta);
+  if (nextCount <= 0) {
+    stats.delete(normalizedUid);
+  } else {
+    stats.set(normalizedUid, {
+      uid: normalizedUid,
+      name: toTrimmedString(name) || existing.name || "Membru",
+      count: nextCount,
+      isAdmin: Boolean(isAdmin || existing.isAdmin),
+    });
+  }
+
+  return {
+    contributorStats: serializeContributorStats(stats),
+    topContributors: getTopContributors(stats),
+    uniqueResponderCount: stats.size,
   };
 };
 
@@ -1122,29 +1261,36 @@ const renderThreadBadges = () => {
 
   clearNode(refs.threadSummaryBadges);
 
-  const badges = [];
-
-  if (state.thread.isSticky)
-    badges.push({ text: "sticky", className: "forum-pill forum-pill-sticky" });
-  if (state.thread.isLocked)
-    badges.push({ text: "blocată", className: "forum-pill" });
-  if (state.thread.authorIsAdmin)
-    badges.push({ text: "echipă", className: "forum-pill forum-pill-admin" });
-  if (state.thread.episodeId)
-    badges.push({ text: "episod", className: "forum-pill forum-pill-episode" });
-  if (state.thread.moderationStatus !== "visible") {
-    badges.push({
-      text: `status: ${state.thread.moderationStatus}`,
-      className: "forum-pill",
-    });
+  if (state.thread.episodeId) {
+    refs.threadSummaryBadges.appendChild(
+      createThreadPill("forum-pill forum-pill-episode", "episode", "Episod"),
+    );
   }
 
-  badges.forEach((badge) => {
+  if (state.thread.isSticky) {
+    refs.threadSummaryBadges.appendChild(
+      createThreadPill("forum-pill forum-pill-sticky", "sticky", "Fixat"),
+    );
+  }
+
+  if (state.thread.authorIsAdmin) {
+    refs.threadSummaryBadges.appendChild(
+      createThreadPill("forum-pill forum-pill-admin", "admin", "Echipă"),
+    );
+  }
+
+  if (state.thread.isLocked) {
+    refs.threadSummaryBadges.appendChild(
+      createThreadPill("forum-pill forum-pill-locked", "locked", "Blocată"),
+    );
+  }
+
+  if (state.thread.moderationStatus !== "visible") {
     const node = document.createElement("span");
-    node.className = badge.className;
-    node.textContent = badge.text;
+    node.className = "forum-pill";
+    node.textContent = `status: ${state.thread.moderationStatus}`;
     refs.threadSummaryBadges.appendChild(node);
-  });
+  }
 };
 
 const updateSidebarStats = () => {
@@ -1282,7 +1428,9 @@ const renderThreadSummary = () => {
     );
   }
   if (refs.threadCreatedAt) {
-    refs.threadCreatedAt.textContent = formatRelativeTime(state.thread.createdAt);
+    refs.threadCreatedAt.textContent = formatRelativeTime(
+      state.thread.createdAt,
+    );
   }
   if (refs.threadCategory) {
     refs.threadCategory.textContent = getThreadCategoryLabel(state.thread);
@@ -1292,8 +1440,16 @@ const renderThreadSummary = () => {
     clearNode(refs.threadEpisode);
     if (state.thread.episodeId) {
       const episodeLink = document.createElement("a");
+      episodeLink.className = "forum-thread-episode-link";
       episodeLink.href = `/episodes#${encodeURIComponent(state.thread.episodeId)}`;
-      episodeLink.textContent = "Deschide episodul";
+      const label = document.createElement("span");
+      label.textContent = "Deschide episodul";
+      const icon = document.createElement("span");
+      icon.className = "forum-thread-episode-link-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"></path></svg>';
+      episodeLink.append(label, icon);
       refs.threadEpisode.appendChild(episodeLink);
     } else {
       refs.threadEpisode.textContent = "-";
@@ -1307,8 +1463,7 @@ const renderThreadSummary = () => {
 
   const activityDate = state.thread.lastActivityAt || state.thread.createdAt;
   if (refs.threadLastActivity) {
-    refs.threadLastActivity.textContent =
-      `Ultima activitate: ${formatRelativeTime(activityDate)} (${formatAbsoluteTime(activityDate)})`;
+    refs.threadLastActivity.textContent = `Ultima activitate: ${formatRelativeTime(activityDate)} (${formatAbsoluteTime(activityDate)})`;
   }
 
   renderThreadBadges();
@@ -1380,7 +1535,9 @@ const renderReplyComposer = () => {
     refs.replyInput.placeholder = "Autentifică-te pentru a răspunde.";
 
     clearNode(refs.replyAuthNote);
-    refs.replyAuthNote.append("Trebuie să fii autentificat pentru a răspunde. ");
+    refs.replyAuthNote.append(
+      "Trebuie să fii autentificat pentru a răspunde. ",
+    );
 
     const loginLink = document.createElement("a");
     loginLink.href = "/login";
@@ -1454,7 +1611,8 @@ const renderReplies = () => {
 
   replies.forEach((reply, index) => {
     const replyKey = toTrimmedString(reply?.id);
-    const shouldReveal = Boolean(replyKey) && !state.revealedReplyIds.has(replyKey);
+    const shouldReveal =
+      Boolean(replyKey) && !state.revealedReplyIds.has(replyKey);
     if (replyKey) {
       state.revealedReplyIds.add(replyKey);
     }
@@ -1504,13 +1662,13 @@ const renderReplies = () => {
 
     if (reply.authorIsAdmin) {
       badges.appendChild(
-        buildReplyBadge("forum-pill forum-pill-admin", "echipă"),
+        createThreadPill("forum-pill forum-pill-admin", "admin", "Echipă"),
       );
     }
 
     if (reply.moderationStatus !== "visible") {
       badges.appendChild(
-        buildReplyBadge("forum-pill", `status: ${reply.moderationStatus}`),
+        createThreadPill("forum-pill", `status: ${reply.moderationStatus}`),
       );
     }
 
@@ -2026,12 +2184,18 @@ const submitNewReply = async () => {
   setReplyFeedback("Se publică răspunsul...");
   renderReplyComposer();
 
+  const replyAuthor = {
+    uid: state.authUser.uid,
+    name: extractDisplayName(state.authUser),
+    isAdmin: state.isAdmin,
+  };
+
   const buildReplyPayload = () => {
     const payload = {
       body,
-      authorUid: state.authUser.uid,
-      authorName: extractDisplayName(state.authUser),
-      authorIsAdmin: state.isAdmin,
+      authorUid: replyAuthor.uid,
+      authorName: replyAuthor.name,
+      authorIsAdmin: replyAuthor.isAdmin,
       moderationStatus: "visible",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -2058,10 +2222,15 @@ const submitNewReply = async () => {
       const currentThread = threadSnapshot.data() || {};
       const nextCount = safeInt(currentThread.commentCount, 0) + 1;
       const replyRef = doc(collection(threadRef, THREAD_REPLIES_COLLECTION));
+      const contributorUpdate = buildContributorThreadUpdate(currentThread, {
+        ...replyAuthor,
+        delta: 1,
+      });
 
       transaction.set(replyRef, buildReplyPayload());
       transaction.update(threadRef, {
         commentCount: nextCount,
+        ...contributorUpdate,
         updatedAt: serverTimestamp(),
         lastActivityAt: serverTimestamp(),
       });
@@ -2233,10 +2402,17 @@ const deleteReply = async (replyId) => {
 
       const currentThread = threadSnapshot.data() || {};
       const nextCount = Math.max(0, safeInt(currentThread.commentCount, 0) - 1);
+      const contributorUpdate = buildContributorThreadUpdate(currentThread, {
+        uid: reply.authorUid,
+        name: reply.authorName,
+        isAdmin: reply.authorIsAdmin,
+        delta: -1,
+      });
 
       transaction.delete(replyRef);
       transaction.update(threadRef, {
         commentCount: nextCount,
+        ...contributorUpdate,
         updatedAt: serverTimestamp(),
         lastActivityAt: serverTimestamp(),
       });

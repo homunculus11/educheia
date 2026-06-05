@@ -199,7 +199,6 @@
         <div class="forum-shell">
           <div class="forum-hero-inner">
             <div class="forum-hero-copy">
-              <p class="forum-kicker">Comunitatea Educheia</p>
               <h1 id="forum-title">Forumul Educheia: Discută și Învață</h1>
               <p class="forum-lead">
                 Un spațiu pentru idei aplicabile, întrebări reale și conversații
@@ -333,11 +332,48 @@
               </div>
             </details>
 
-            <section class="forum-block" aria-labelledby="forum-official-title">
-              <div class="forum-block-head">
-                <h2 id="forum-official-title">Anunțuri și Resurse Oficiale</h2>
-                <p>Subiecte importante sau fixate de echipa Educheia.</p>
-              </div>
+            <details
+              id="forum-sticky-panel"
+              class="forum-block forum-sticky-panel"
+            >
+              <summary class="forum-sticky-summary">
+                <span class="forum-sticky-summary-main">
+                  <span class="forum-sticky-summary-icon" aria-hidden="true">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-megaphone-icon lucide-megaphone"
+                    >
+                      <path
+                        d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"
+                      />
+                      <path
+                        d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14"
+                      />
+                      <path d="M8 6v8" />
+                    </svg>
+                  </span>
+                  <span class="forum-sticky-summary-copy">
+                    <span id="forum-official-title"
+                      >Anunțuri și Resurse Oficiale</span
+                    >
+                    <span>Subiecte importante sau fixate de echipa Educheia.</span>
+                  </span>
+                </span>
+                <span
+                  id="forum-sticky-new-count"
+                  class="forum-sticky-new-count"
+                  aria-label="Subiecte fixate disponibile"
+                  >0</span
+                >
+              </summary>
 
               <div
                 class="forum-chip-row forum-chip-row-compact"
@@ -376,7 +412,7 @@
                 role="list"
                 aria-live="polite"
               ></div>
-            </section>
+            </details>
 
             <section
               id="forum-episode-section"
@@ -557,77 +593,176 @@
 
           <aside class="forum-sidebar" aria-label="Panou lateral forum">
             <section
+              class="forum-side-card forum-recent-episodes-card"
+              aria-labelledby="forum-recent-episodes-title"
+            >
+              <h3 id="forum-recent-episodes-title">
+                Discuții din episoadele recente
+              </h3>
+              <div
+                id="forum-recent-episodes-list"
+                class="forum-recent-episodes-list"
+                role="list"
+                aria-live="polite"
+              ></div>
+            </section>
+
+            <section
+              class="forum-side-card forum-rules-card"
+              aria-labelledby="forum-rules-title"
+            >
+              <h3 id="forum-rules-title">Reguli rapide</h3>
+              <ul class="forum-rules-icon-list">
+                <li>
+                  <span class="forum-rule-icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M20 6 9 17l-5-5"
+                      ></path>
+                    </svg>
+                  </span>
+                  <span>Fii respectuos și atacă ideile, nu persoanele.</span>
+                </li>
+                <li>
+                  <span class="forum-rule-icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M12 20h9"
+                      ></path>
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"
+                      ></path>
+                    </svg>
+                  </span>
+                  <span>Rămâi la subiect și oferă context util.</span>
+                </li>
+                <li>
+                  <span class="forum-rule-icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"
+                      ></path>
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="m9 12 2 2 4-4"
+                      ></path>
+                    </svg>
+                  </span>
+                  <span>Evită date personale sensibile în postări.</span>
+                </li>
+              </ul>
+            </section>
+
+            <details
               id="forum-admin-tools"
               class="forum-side-card forum-admin-card"
               hidden
             >
-              <h3>Panou Admin</h3>
-              <p class="forum-admin-copy">
-                Creează categorii noi și pornește thread-uri fixate direct din
-                formularul de discuție.
-              </p>
-              <form
-                id="admin-category-form"
-                class="forum-admin-form"
-                novalidate
-              >
-                <label for="admin-category-name">Nume categorie</label>
-                <input
-                  id="admin-category-name"
-                  name="name"
-                  type="text"
-                  minlength="2"
-                  maxlength="70"
-                  required
-                  placeholder="Ex: Pedagogie modernă"
-                />
-
-                <label for="admin-category-slug">Slug (opțional)</label>
-                <input
-                  id="admin-category-slug"
-                  name="slug"
-                  type="text"
-                  minlength="2"
-                  maxlength="70"
-                  placeholder="Ex: pedagogie-moderna"
-                />
-
-                <label for="admin-category-type">Tip categorie</label>
-                <select id="admin-category-type" name="type" required>
-                  <option value="normal">Normal</option>
-                  <option value="admin">Admin</option>
-                </select>
-
-                <label for="admin-category-description"
-                  >Descriere (opțional)</label
-                >
-                <textarea
-                  id="admin-category-description"
-                  name="description"
-                  maxlength="280"
-                  placeholder="Scurt context despre scopul categoriei."
-                ></textarea>
-
-                <div class="forum-admin-actions">
-                  <button
-                    id="admin-category-submit"
-                    type="submit"
-                    class="btn btn-primary"
+              <summary class="forum-admin-card-summary">
+                <span>
+                  <span class="forum-admin-card-title">Panou Admin</span>
+                  <span class="forum-admin-card-subtitle"
+                    >Categorii și thread-uri fixate</span
                   >
-                    Creează categorie
-                  </button>
-                </div>
-              </form>
-            </section>
+                </span>
+                <span class="forum-admin-card-icon" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M6 9l6 6 6-6"
+                    ></path>
+                  </svg>
+                </span>
+              </summary>
+              <div class="forum-admin-card-body">
+                <p class="forum-admin-copy">
+                  Creează categorii noi și pornește thread-uri fixate direct din
+                  formularul de discuție.
+                </p>
+                <form
+                  id="admin-category-form"
+                  class="forum-admin-form"
+                  novalidate
+                >
+                  <label for="admin-category-name">Nume categorie</label>
+                  <input
+                    id="admin-category-name"
+                    name="name"
+                    type="text"
+                    minlength="2"
+                    maxlength="70"
+                    required
+                    placeholder="Ex: Pedagogie modernă"
+                  />
 
-            <section class="forum-side-card">
-              <h3>Reguli de comunitate</h3>
-              <ul class="forum-rules-list">
-                <li>Fii respectuos și atacă ideile, nu persoanele.</li>
-                <li>Rămâi la subiect și oferă context util.</li>
-                <li>Evită date personale sensibile în postări.</li>
-              </ul>
-            </section>
+                  <label for="admin-category-slug">Slug (opțional)</label>
+                  <input
+                    id="admin-category-slug"
+                    name="slug"
+                    type="text"
+                    minlength="2"
+                    maxlength="70"
+                    placeholder="Ex: pedagogie-moderna"
+                  />
+
+                  <label for="admin-category-type">Tip categorie</label>
+                  <select id="admin-category-type" name="type" required>
+                    <option value="normal">Normal</option>
+                    <option value="admin">Admin</option>
+                  </select>
+
+                  <label for="admin-category-description"
+                    >Descriere (opțional)</label
+                  >
+                  <textarea
+                    id="admin-category-description"
+                    name="description"
+                    maxlength="280"
+                    placeholder="Scurt context despre scopul categoriei."
+                  ></textarea>
+
+                  <div class="forum-admin-actions">
+                    <button
+                      id="admin-category-submit"
+                      type="submit"
+                      class="btn btn-primary"
+                    >
+                      Creează categorie
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </details>
           </aside>
         </div>
       </section>
@@ -684,7 +819,6 @@
         </button>
 
         <header class="forum-modal-header">
-          <p class="forum-modal-kicker">Discuție nouă</p>
           <h2 id="thread-modal-title">Start o nouă discuție</h2>
           <p>
             Spune clar ce întrebi sau ce ai învățat, ca ceilalți să poată

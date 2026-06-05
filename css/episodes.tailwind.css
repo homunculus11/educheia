@@ -615,14 +615,15 @@ body.player-open {
 }
 
 .episode-forum-open-link {
-  @apply mt-3 text-[#9ec2e0];
-  border-color: rgba(138, 167, 197, 0.24);
-  background: rgba(24, 40, 70, 0.68);
+  @apply mt-3 text-white/70;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .episode-forum-open-link:hover {
-  border-color: rgba(112, 220, 236, 0.35);
-  color: #dffbff;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .episode-forum-list {
@@ -630,23 +631,12 @@ body.player-open {
 }
 
 .episode-forum-thread {
-  @apply rounded-xl border px-3 py-2.5 no-underline transition-all;
-  border-color: rgba(138, 167, 197, 0.18);
-  background: linear-gradient(
-    180deg,
-    rgba(23, 37, 64, 0.9),
-    rgba(18, 31, 54, 0.96)
-  );
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  @apply rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2.5 no-underline transition-colors;
 }
 
 .episode-forum-thread:hover {
-  border-color: rgba(112, 220, 236, 0.34);
-  background: linear-gradient(
-    180deg,
-    rgba(26, 43, 74, 0.94),
-    rgba(20, 35, 61, 0.98)
-  );
+  @apply bg-white/[0.06];
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .episode-forum-thread-top {
@@ -655,9 +645,9 @@ body.player-open {
 
 .episode-forum-thread-icon {
   @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border;
-  border-color: rgba(112, 220, 236, 0.34);
-  background: rgba(20, 39, 67, 0.9);
-  color: #8fe0ef;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .episode-forum-thread-icon svg {
@@ -679,9 +669,9 @@ body.player-open {
 
 .episode-forum-thread-category {
   @apply inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold;
-  border-color: rgba(105, 208, 226, 0.2);
-  background: rgba(137, 88, 225, 0.2);
-  color: #ddd0ff;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .episode-forum-thread-meta-right {

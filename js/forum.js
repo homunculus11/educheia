@@ -5,6 +5,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getCountFromServer,
   getDoc,
   getDocs,
   limit,
@@ -18,7 +19,9 @@ import {
 
 const AUTH_RETURN_KEY = "authReturnTo";
 const PAGE_SIZE = 5;
-const STICKY_LIMIT = 8;
+const STICKY_LIMIT = 12;
+const RECENT_EPISODES_LIMIT = 3;
+const EPISODES_CACHE_KEY = "episodesCacheV1";
 const MAX_VISIBLE_CATEGORY_CHIPS = 6;
 const FEED_AUTOLOAD_MARGIN_PX = 240;
 const FEED_AUTOLOAD_DELAY_MS = 160;
@@ -50,6 +53,8 @@ const state = {
   categories: [],
   categoriesById: new Map(),
   stickyThreads: [],
+  recentEpisodes: [],
+  recentEpisodeThreadCounts: new Map(),
   episodeThreads: [],
   feedThreads: [],
   activeCategory: "all",
@@ -58,7 +63,7 @@ const state = {
   activeEpisodeTitle: "",
   activeSort: "activity",
   searchTerm: "",
-  composerCategoryScope: "all",
+  composerCategoryScope: "normal",
   feedCursor: null,
   feedLastBatchSize: 0,
   feedAutoCheckTimeoutId: 0,
@@ -67,6 +72,8 @@ const state = {
   isLoadingSticky: false,
   isLoadingEpisodeThreads: false,
   stickyLoadFailed: false,
+  recentEpisodesLoadFailed: false,
+  hasScrolledToInitialEpisodeSection: false,
   episodeThreadsLoadFailed: false,
   feedRequestId: 0,
   episodeThreadsRequestId: 0,
@@ -102,9 +109,13 @@ const refs = {
   createHelp: document.getElementById("forum-create-help"),
 
   stickyLoading: document.getElementById("sticky-loading"),
+  stickyPanel: document.getElementById("forum-sticky-panel"),
+  stickyNewCount: document.getElementById("forum-sticky-new-count"),
   stickyList: document.getElementById("sticky-list"),
   stickyEmpty: document.getElementById("sticky-empty"),
   stickyCategoryChips: document.getElementById("forum-sticky-category-chips"),
+
+  recentEpisodesList: document.getElementById("forum-recent-episodes-list"),
 
   episodeSection: document.getElementById("forum-episode-section"),
   episodeTitle: document.getElementById("forum-episode-title"),
@@ -181,7 +192,9 @@ const readInitialEpisodeFilter = () => {
   const params = new URLSearchParams(window.location.search);
   return {
     episodeId: normalizeEpisodeId(params.get("episode")),
-    episodeTitle: toTrimmedString(params.get("episodeTitle")).slice(0, 180),
+    episodeTitle: toTrimmedString(params.get("episodeTitle"))
+      .replace(/\s*\|\s*Educheia cu Elena Vorotneac\s*$/i, "")
+      .slice(0, 180),
     shouldAutoOpen: params.get("new") === "1",
   };
 };
@@ -214,6 +227,21 @@ const safeInt = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
 };
 
+const sanitizeImageUrl = (url, fallback = "../images/logo-light.webp") => {
+  if (typeof url !== "string" || !url.trim()) return fallback;
+
+  try {
+    const parsed = new URL(url, window.location.origin);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.href;
+    }
+  } catch {
+    return fallback;
+  }
+
+  return fallback;
+};
+
 const toDateOrNull = (raw) => {
   if (!raw) return null;
   if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
@@ -239,8 +267,19 @@ const extractDisplayName = (user) => {
   return local.slice(0, 80);
 };
 
-const pluralizeComments = (count) =>
-  count === 1 ? "comentariu" : "comentarii";
+const extractInitials = (value) => {
+  const normalized = toTrimmedString(value);
+  if (!normalized) return "ME";
+
+  const words = normalized.split(" ").filter(Boolean);
+  if (words.length >= 2) {
+    return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  }
+
+  return normalized.slice(0, 2).toUpperCase();
+};
+
+const pluralizeReplies = (count) => (count === 1 ? "răspuns" : "răspunsuri");
 
 const formatRelativeTime = (rawDate) => {
   const date = toDateOrNull(rawDate);
@@ -381,8 +420,31 @@ const mapCategoryDoc = (docSnap) => {
   };
 };
 
+const normalizeThreadContributors = (rawContributors) => {
+  if (!Array.isArray(rawContributors)) return [];
+
+  return rawContributors
+    .map((item) => ({
+      uid: toTrimmedString(item?.uid),
+      name: toTrimmedString(item?.name) || "Membru",
+      count: safeInt(item?.count, 0),
+      isAdmin: Boolean(item?.isAdmin),
+    }))
+    .filter((item) => item.uid && item.count > 0)
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name, "ro");
+    })
+    .slice(0, 2);
+};
+
 const mapThreadDoc = (docSnap) => {
   const data = docSnap.data() || {};
+  const topContributors = normalizeThreadContributors(data.topContributors);
+  const uniqueResponderCount = Math.max(
+    safeInt(data.uniqueResponderCount, 0),
+    topContributors.length,
+  );
 
   return {
     id: docSnap.id,
@@ -398,6 +460,8 @@ const mapThreadDoc = (docSnap) => {
     isLocked: Boolean(data.isLocked),
     moderationStatus: toTrimmedString(data.moderationStatus) || "visible",
     commentCount: safeInt(data.commentCount, 0),
+    topContributors,
+    uniqueResponderCount,
     createdAt: toDateOrNull(data.createdAt),
     updatedAt: toDateOrNull(data.updatedAt),
     lastActivityAt:
@@ -416,7 +480,13 @@ const getThreadCategoryLabel = (thread) => {
 
 const buildThreadSearchText = (thread) => {
   const categoryLabel = getThreadCategoryLabel(thread);
-  return [thread.title, thread.body, thread.authorName, categoryLabel, thread.episodeId]
+  return [
+    thread.title,
+    thread.body,
+    thread.authorName,
+    categoryLabel,
+    thread.episodeId,
+  ]
     .join(" ")
     .toLowerCase();
 };
@@ -428,6 +498,285 @@ const buildThreadUrl = (thread) => {
   );
   return `/forum/thread/${threadId}/${threadSlug}`;
 };
+
+const normalizeEpisodeItems = (rawItems = []) =>
+  rawItems
+    .map((item) => {
+      const snippet = item?.snippet || item || {};
+      return {
+        videoId: toTrimmedString(
+          snippet?.resourceId?.videoId || item?.videoId || snippet?.videoId,
+        ),
+        title: toTrimmedString(snippet.title || item?.title),
+        description: toTrimmedString(snippet.description || item?.description),
+        publishedAt: snippet.publishedAt || item?.publishedAt || "",
+        thumbnails: snippet.thumbnails || item?.thumbnails || null,
+        dateObj: toDateOrNull(snippet.publishedAt || item?.publishedAt),
+      };
+    })
+    .filter((episode) => episode.videoId && episode.title);
+
+const readEpisodesFromLocalCache = () => {
+  const sources = [];
+
+  try {
+    sources.push(
+      JSON.parse(localStorage.getItem(EPISODES_CACHE_KEY) || "{}")?.items,
+    );
+  } catch {
+    sources.push([]);
+  }
+
+  try {
+    sources.push(JSON.parse(sessionStorage.getItem("episodes") || "[]"));
+  } catch {
+    sources.push([]);
+  }
+
+  for (const source of sources) {
+    const normalized = normalizeEpisodeItems(
+      Array.isArray(source) ? source : [],
+    );
+    if (normalized.length) return normalized;
+  }
+
+  return [];
+};
+
+const loadEpisodesForForum = async () => {
+  if (state.recentEpisodes.length) return state.recentEpisodes;
+
+  try {
+    if (typeof getEpisodes === "function") {
+      const data = await getEpisodes();
+      const normalized = normalizeEpisodeItems(
+        Array.isArray(data?.items) ? data.items : [],
+      );
+      if (normalized.length) {
+        state.recentEpisodes = normalized;
+        return normalized;
+      }
+    }
+  } catch {
+    // Cached episodes below still give the panel useful content offline.
+  }
+
+  const cached = readEpisodesFromLocalCache();
+  state.recentEpisodes = cached;
+  return cached;
+};
+
+const getEpisodeDisplayTitle = (episode) =>
+  toTrimmedString(episode?.title)
+    .replace(/\s*\|\s*Educheia cu Elena Vorotneac\s*$/i, "")
+    .trim() || "Episod Educheia";
+
+const getEpisodeThumbnailUrl = (episode) => {
+  const thumbnails = episode?.thumbnails || {};
+  const imageUrl =
+    thumbnails.medium?.url ||
+    thumbnails.high?.url ||
+    thumbnails.maxres?.url ||
+    thumbnails.default?.url ||
+    (episode?.videoId ?
+      `https://img.youtube.com/vi/${encodeURIComponent(episode.videoId)}/mqdefault.jpg`
+    : "");
+  return sanitizeImageUrl(imageUrl);
+};
+
+const getEpisodeDisplayNumber = (episode, allEpisodes) => {
+  if (!episode?.videoId) return null;
+
+  const ordered = [...allEpisodes].sort((a, b) => {
+    const dateDelta =
+      getThreadTimestamp(a.dateObj || a.publishedAt) -
+      getThreadTimestamp(b.dateObj || b.publishedAt);
+    if (dateDelta !== 0) return dateDelta;
+    return String(a.videoId || "").localeCompare(String(b.videoId || ""));
+  });
+
+  const index = ordered.findIndex((item) => item.videoId === episode.videoId);
+  return index >= 0 ? index + 1 : null;
+};
+
+const buildEpisodeForumUrl = (episode, { newThread = false } = {}) => {
+  const url = new URL("/forum", window.location.origin);
+  const episodeId = normalizeEpisodeId(episode?.videoId);
+  if (episodeId) {
+    url.searchParams.set("episode", episodeId);
+  }
+
+  const title = getEpisodeDisplayTitle(episode);
+  if (title) {
+    url.searchParams.set("episodeTitle", title.slice(0, 180));
+  }
+
+  if (newThread) {
+    url.searchParams.set("new", "1");
+  }
+
+  return `${url.pathname}${url.search}`;
+};
+
+const hydrateActiveEpisodeTitleFromCatalog = () => {
+  if (!state.activeEpisodeId || state.activeEpisodeTitle) return;
+  const match = state.recentEpisodes.find(
+    (episode) => episode.videoId === state.activeEpisodeId,
+  );
+  if (!match) return;
+  state.activeEpisodeTitle = getEpisodeDisplayTitle(match).slice(0, 180);
+  syncEpisodeFilterToUrl();
+};
+
+const countVisibleEpisodeThreads = async (episodeId) => {
+  const normalizedEpisodeId = normalizeEpisodeId(episodeId);
+  if (!normalizedEpisodeId) return 0;
+
+  const threadsRef = collection(db, THREADS_COLLECTION);
+  const constraints = [
+    where("episodeId", "==", normalizedEpisodeId),
+    where("moderationStatus", "==", "visible"),
+  ];
+
+  try {
+    const countSnapshot = await getCountFromServer(
+      query(threadsRef, ...constraints),
+    );
+    return safeInt(countSnapshot.data()?.count, 0);
+  } catch {
+    const fallbackSnapshot = await getDocs(
+      query(threadsRef, ...constraints, limit(50)),
+    );
+    return fallbackSnapshot.docs.length;
+  }
+};
+
+const renderRecentEpisodesPanel = ({ isLoading = false } = {}) => {
+  if (!refs.recentEpisodesList) return;
+
+  clearNode(refs.recentEpisodesList);
+
+  if (isLoading) {
+    for (let index = 0; index < RECENT_EPISODES_LIMIT; index += 1) {
+      const skeleton = document.createElement("div");
+      skeleton.className = "forum-recent-episode-skeleton";
+      skeleton.setAttribute("aria-hidden", "true");
+      refs.recentEpisodesList.appendChild(skeleton);
+    }
+    return;
+  }
+
+  const sortedEpisodes = [...state.recentEpisodes].sort(
+    (a, b) =>
+      getThreadTimestamp(b.dateObj || b.publishedAt) -
+      getThreadTimestamp(a.dateObj || a.publishedAt),
+  );
+  const latest = sortedEpisodes.slice(0, RECENT_EPISODES_LIMIT);
+
+  if (!latest.length) {
+    const empty = document.createElement("p");
+    empty.className = "forum-recent-episodes-empty";
+    empty.textContent = "Episoadele recente nu sunt disponibile momentan.";
+    refs.recentEpisodesList.appendChild(empty);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  latest.forEach((episode) => {
+    const episodeNumber = getEpisodeDisplayNumber(
+      episode,
+      state.recentEpisodes,
+    );
+    const threadCount = safeInt(
+      state.recentEpisodeThreadCounts.get(episode.videoId),
+      0,
+    );
+
+    const link = document.createElement("a");
+    link.className = "forum-recent-episode";
+    link.href = buildEpisodeForumUrl(episode);
+    link.setAttribute("role", "listitem");
+
+    const image = document.createElement("img");
+    image.className = "forum-recent-episode-thumb";
+    image.src = getEpisodeThumbnailUrl(episode);
+    image.alt = "";
+    image.loading = "lazy";
+    image.decoding = "async";
+    image.width = 46;
+    image.height = 46;
+    image.referrerPolicy = "no-referrer";
+
+    const copy = document.createElement("span");
+    copy.className = "forum-recent-episode-copy";
+
+    const top = document.createElement("span");
+    top.className = "forum-recent-episode-top";
+
+    const number = document.createElement("span");
+    number.className = "forum-recent-episode-number";
+    number.textContent =
+      episodeNumber ? `EP ${String(episodeNumber).padStart(2, "0")}` : "EP";
+
+    const title = document.createElement("span");
+    title.className = "forum-recent-episode-title";
+    title.textContent = getEpisodeDisplayTitle(episode);
+
+    top.append(number, title);
+
+    const count = document.createElement("span");
+    count.className = "forum-recent-episode-count";
+    count.textContent = `${threadCount} ${pluralizeReplies(threadCount)}`;
+
+    copy.append(top, count);
+
+    const arrow = document.createElement("span");
+    arrow.className = "forum-recent-episode-arrow";
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m9 18 6-6-6-6"></path></svg>';
+
+    link.append(image, copy, arrow);
+    fragment.appendChild(link);
+  });
+
+  refs.recentEpisodesList.appendChild(fragment);
+};
+
+const loadRecentEpisodesPanel = async () => {
+  state.recentEpisodesLoadFailed = false;
+  renderRecentEpisodesPanel({ isLoading: true });
+
+  try {
+    const episodes = await loadEpisodesForForum();
+    hydrateActiveEpisodeTitleFromCatalog();
+
+    const latest = [...episodes]
+      .sort(
+        (a, b) =>
+          getThreadTimestamp(b.dateObj || b.publishedAt) -
+          getThreadTimestamp(a.dateObj || a.publishedAt),
+      )
+      .slice(0, RECENT_EPISODES_LIMIT);
+
+    const counts = await Promise.all(
+      latest.map(async (episode) => [
+        episode.videoId,
+        await countVisibleEpisodeThreads(episode.videoId),
+      ]),
+    );
+
+    state.recentEpisodeThreadCounts = new Map(counts);
+  } catch {
+    state.recentEpisodesLoadFailed = true;
+  } finally {
+    renderRecentEpisodesPanel();
+    updateThreadEpisodeContext();
+    renderEpisodeSection();
+  }
+};
+
 const isAdminCategoryThread = (thread) => thread?.categoryType === "admin";
 const toPublicFeedThreads = (threads) =>
   threads.filter((thread) => !isAdminCategoryThread(thread));
@@ -471,6 +820,17 @@ const ICON_SVG_MARKUP = {
     '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2-icon lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
 };
 
+const THREAD_PILL_ICON_MARKUP = {
+  episode:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clapperboard-icon lucide-clapperboard"><path d="m12.296 3.464 3.02 3.956"/><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3z"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="m6.18 5.276 3.1 3.899"/></svg>',
+  sticky:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pin-icon lucide-pin"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>',
+  admin:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users-icon lucide-users"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg>',
+  locked:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lock-icon lucide-lock"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+};
+
 const createActionIcon = (iconName) => {
   const template = document.createElement("template");
   template.innerHTML = (
@@ -481,6 +841,35 @@ const createActionIcon = (iconName) => {
   node.classList.add("forum-icon-action-svg");
   node.setAttribute("aria-hidden", "true");
   return node;
+};
+
+const createThreadPillIcon = (iconName) => {
+  const template = document.createElement("template");
+  template.innerHTML = (
+    THREAD_PILL_ICON_MARKUP[iconName] || THREAD_PILL_ICON_MARKUP.episode
+  ).trim();
+  const node = template.content.firstElementChild;
+  if (!(node instanceof SVGElement)) return null;
+  node.classList.add("forum-thread-pill-icon");
+  node.setAttribute("aria-hidden", "true");
+  return node;
+};
+
+const createThreadStatusPill = (className, iconName, label) => {
+  const pill = document.createElement("span");
+  pill.className = className;
+
+  const icon = createThreadPillIcon(iconName);
+  if (icon) {
+    pill.appendChild(icon);
+  }
+
+  const text = document.createElement("span");
+  text.className = "forum-thread-pill-label";
+  text.textContent = label;
+  pill.appendChild(text);
+
+  return pill;
 };
 
 const buildIconAction = ({
@@ -585,7 +974,9 @@ const applyStickyFilters = (threads) => {
 };
 
 const getFilteredFeedThreads = () =>
-  applyFeedFilters(toPublicFeedThreads(state.feedThreads));
+  sortThreadsClientSide(
+    applyFeedFilters(toPublicFeedThreads(state.feedThreads)),
+  );
 
 const updateChipRowOverflow = (
   chipRowRef,
@@ -710,6 +1101,31 @@ const updateBackToTopVisibility = () => {
   }, BACK_TO_TOP_FADE_MS);
 };
 
+const getCategoryTone = (thread) => {
+  const tones = ["teal", "blue", "violet", "amber", "green"];
+  const source = toTrimmedString(
+    thread?.categoryId || getThreadCategoryLabel(thread),
+  );
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash + source.charCodeAt(index) * (index + 1)) % tones.length;
+  }
+  return tones[hash] || tones[0];
+};
+
+const createUserAvatar = (name, className = "forum-thread-avatar") => {
+  const avatar = document.createElement("span");
+  avatar.className = className;
+  avatar.setAttribute("aria-hidden", "true");
+  avatar.textContent = extractInitials(name);
+  return avatar;
+};
+
+const formatCappedCount = (count) => {
+  const safeCount = safeInt(count, 0);
+  return safeCount > 9 ? "9+" : String(safeCount);
+};
+
 const renderThreadList = (listRef, threads, { revealedIds = null } = {}) => {
   clearNode(listRef);
 
@@ -729,71 +1145,132 @@ const renderThreadList = (listRef, threads, { revealedIds = null } = {}) => {
 
     const link = document.createElement("a");
     link.className =
-      shouldReveal ? "forum-thread-link forum-reveal-item" : "forum-thread-link";
+      shouldReveal ?
+        "forum-thread-link forum-reveal-item"
+      : "forum-thread-link";
     if (shouldReveal) {
       link.style.setProperty("--forum-reveal-index", String(index));
     }
     link.href = buildThreadUrl(thread);
     link.setAttribute("role", "listitem");
 
+    const categoryPill = document.createElement("span");
+    categoryPill.className = `forum-thread-category-badge forum-thread-category-${getCategoryTone(thread)}`;
+    categoryPill.textContent = getThreadCategoryLabel(thread);
+
     const head = document.createElement("div");
     head.className = "forum-thread-head";
-
-    const copyWrap = document.createElement("div");
 
     const title = document.createElement("h3");
     title.className = "forum-thread-title";
     title.textContent = thread.title;
+
+    const statusCluster = document.createElement("div");
+    statusCluster.className = "forum-thread-status-group";
+
+    head.append(categoryPill, title, statusCluster);
+
+    const footer = document.createElement("div");
+    footer.className = "forum-thread-footer";
+
+    const opAvatar = createUserAvatar(
+      thread.authorName,
+      thread.authorIsAdmin ?
+        "forum-thread-avatar forum-thread-avatar-op forum-thread-avatar-admin"
+      : "forum-thread-avatar forum-thread-avatar-op",
+    );
+
+    const byline = document.createElement("span");
+    byline.className = "forum-thread-byline";
+    byline.textContent = `${thread.authorName} · ${formatRelativeTime(
+      thread.lastActivityAt || thread.createdAt,
+    )}`;
+
+    footer.append(opAvatar, byline);
+
+    if (thread.episodeId) {
+      statusCluster.appendChild(
+        createThreadStatusPill(
+          "forum-thread-category-badge forum-pill-episode",
+          "episode",
+          "Episod",
+        ),
+      );
+    }
+
+    if (thread.isSticky) {
+      statusCluster.appendChild(
+        createThreadStatusPill(
+          "forum-thread-category-badge forum-pill-sticky",
+          "sticky",
+          "Fixat",
+        ),
+      );
+    }
+
+    if (thread.authorIsAdmin) {
+      statusCluster.appendChild(
+        createThreadStatusPill(
+          "forum-thread-category-badge forum-pill-admin",
+          "admin",
+          "Echipă",
+        ),
+      );
+    }
+
+    if (thread.isLocked) {
+      statusCluster.appendChild(
+        createThreadStatusPill(
+          "forum-thread-category-badge forum-pill-locked",
+          "locked",
+          "Blocată",
+        ),
+      );
+    }
+
+    const middle = document.createElement("div");
+    middle.className = "forum-thread-middle";
 
     const body = document.createElement("p");
     body.className = "forum-thread-body";
     body.textContent =
       thread.body || "Deschide subiectul pentru a vedea detaliile complete.";
 
-    const meta = document.createElement("div");
-    meta.className = "forum-thread-meta";
-
-    const categoryPill = document.createElement("span");
-    categoryPill.className = "forum-pill";
-    categoryPill.textContent = getThreadCategoryLabel(thread);
-    meta.appendChild(categoryPill);
-
-    if (thread.episodeId) {
-      const episodePill = document.createElement("span");
-      episodePill.className = "forum-pill forum-pill-episode";
-      episodePill.textContent = "Episod";
-      meta.appendChild(episodePill);
-    }
-
-    if (thread.isSticky) {
-      const stickyPill = document.createElement("span");
-      stickyPill.className = "forum-pill forum-pill-sticky";
-      stickyPill.textContent = "Fixat";
-      meta.appendChild(stickyPill);
-    }
-
-    if (thread.authorIsAdmin) {
-      const adminPill = document.createElement("span");
-      adminPill.className = "forum-pill forum-pill-admin";
-      adminPill.textContent = "Echipă";
-      meta.appendChild(adminPill);
-    }
-
-    if (thread.isLocked) {
-      const lockedPill = document.createElement("span");
-      lockedPill.className = "forum-pill";
-      lockedPill.textContent = "Blocată";
-      meta.appendChild(lockedPill);
-    }
-
-    const byline = document.createElement("span");
-    byline.textContent = `de ${thread.authorName} · ${formatRelativeTime(thread.createdAt)}`;
-    meta.appendChild(byline);
-
-    copyWrap.append(title, body, meta);
-
     const stats = document.createElement("div");
     stats.className = "forum-thread-stats";
+
+    const contributors = document.createElement("div");
+    contributors.className = "forum-thread-contributors";
+
+    thread.topContributors.forEach((contributor) => {
+      const avatar = createUserAvatar(
+        contributor.name,
+        contributor.isAdmin ?
+          "forum-thread-avatar forum-thread-avatar-admin"
+        : "forum-thread-avatar",
+      );
+      avatar.title = `${contributor.name} · ${contributor.count} ${pluralizeReplies(contributor.count)}`;
+      contributors.appendChild(avatar);
+    });
+
+    const extraContributors = Math.max(
+      0,
+      safeInt(thread.uniqueResponderCount, 0) - thread.topContributors.length,
+    );
+    if (extraContributors > 0) {
+      const extra = document.createElement("span");
+      extra.className = "forum-thread-avatar forum-thread-avatar-extra";
+      extra.setAttribute("aria-hidden", "true");
+      extra.textContent = `+${formatCappedCount(extraContributors)}`;
+      contributors.appendChild(extra);
+    }
+
+    if (!contributors.childElementCount) {
+      contributors.hidden = true;
+    }
+
+    const replies = document.createElement("div");
+    replies.className = "forum-thread-replies-count";
 
     const count = document.createElement("p");
     count.className = "forum-thread-count";
@@ -801,15 +1278,13 @@ const renderThreadList = (listRef, threads, { revealedIds = null } = {}) => {
 
     const countLabel = document.createElement("span");
     countLabel.className = "forum-thread-count-label";
-    countLabel.textContent = pluralizeComments(thread.commentCount);
+    countLabel.textContent = pluralizeReplies(thread.commentCount);
 
-    const activity = document.createElement("p");
-    activity.className = "forum-thread-activity";
-    activity.textContent = `Activitate: ${formatRelativeTime(thread.lastActivityAt || thread.createdAt)}`;
+    replies.append(count, countLabel);
+    stats.append(contributors, replies);
+    middle.append(body, stats);
 
-    stats.append(count, countLabel, activity);
-    head.append(copyWrap, stats);
-    link.appendChild(head);
+    link.append(head, middle, footer);
 
     fragment.appendChild(link);
   });
@@ -825,6 +1300,13 @@ const renderStickySection = () => {
   const visibleSticky = applyStickyFilters(state.stickyThreads);
 
   refs.stickyLoading.hidden = !state.isLoadingSticky;
+  if (refs.stickyNewCount) {
+    refs.stickyNewCount.textContent = formatCappedCount(visibleSticky.length);
+    refs.stickyNewCount.setAttribute(
+      "aria-label",
+      `${visibleSticky.length} subiecte fixate disponibile`,
+    );
+  }
 
   if (
     !state.isLoadingSticky &&
@@ -972,11 +1454,7 @@ const loadFeedPageFallback = async ({ requestId, reset }) => {
     );
   }
 
-  if (state.feedCursor) {
-    fallbackConstraints.push(startAfter(state.feedCursor));
-  }
-
-  fallbackConstraints.push(limit(PAGE_SIZE));
+  fallbackConstraints.push(limit(PAGE_SIZE * 12));
 
   const snapshot = await getDocs(query(threadsRef, ...fallbackConstraints));
   if (requestId !== state.feedRequestId) return false;
@@ -995,12 +1473,10 @@ const loadFeedPageFallback = async ({ requestId, reset }) => {
       }
     });
   }
+  state.feedThreads = sortThreadsClientSide(state.feedThreads);
 
-  if (snapshot.docs.length) {
-    state.feedCursor = snapshot.docs[snapshot.docs.length - 1];
-  }
-
-  state.hasMoreFeed = snapshot.docs.length > 0;
+  state.feedCursor = null;
+  state.hasMoreFeed = false;
   hideFeedError();
   return true;
 };
@@ -1245,6 +1721,7 @@ const loadFeedPage = async ({ reset = false } = {}) => {
         }
       });
     }
+    state.feedThreads = sortThreadsClientSide(state.feedThreads);
 
     if (snapshot.docs.length) {
       state.feedCursor = snapshot.docs[snapshot.docs.length - 1];
@@ -1938,9 +2415,9 @@ const openThreadModal = () => {
 
   setFormFeedback("");
   if (state.isAdmin) {
-    state.composerCategoryScope = "all";
+    state.composerCategoryScope = "normal";
     refs.threadIsSticky.checked = false;
-    setComposerCategoryScope("all", { preferredValue: "" });
+    setComposerCategoryScope("normal", { preferredValue: "" });
   } else {
     setComposerCategoryScope("normal", { preferredValue: "" });
   }
@@ -1949,7 +2426,9 @@ const openThreadModal = () => {
   clearModalCloseTimeout();
   state.isModalOpen = true;
   state.lastModalFocusedElement =
-    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.activeElement instanceof HTMLElement ?
+      document.activeElement
+    : null;
   refs.modal.hidden = false;
   refs.modal.setAttribute("aria-hidden", "false");
   refs.modal.classList.remove("is-closing");
@@ -2041,8 +2520,8 @@ const resetThreadForm = () => {
     refs.threadIsSticky.checked = false;
   }
   if (state.isAdmin) {
-    state.composerCategoryScope = "all";
-    setComposerCategoryScope("all", { preferredValue: "" });
+    state.composerCategoryScope = "normal";
+    setComposerCategoryScope("normal", { preferredValue: "" });
   } else {
     setComposerCategoryScope("normal", { preferredValue: "" });
   }
@@ -2076,6 +2555,9 @@ const submitThread = async () => {
       isLocked: false,
       moderationStatus: "visible",
       commentCount: 0,
+      contributorStats: {},
+      topContributors: [],
+      uniqueResponderCount: 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       lastActivityAt: serverTimestamp(),
@@ -2399,8 +2881,13 @@ const onThreadStickyToggle = () => {
     }
 
     setFormFeedback("");
+    const currentCategoryId = refs.threadCategory.value;
+    const preferredAdminCategoryId =
+      adminCategories.some((category) => category.id === currentCategoryId) ?
+        currentCategoryId
+      : adminCategories[0].id;
     setComposerCategoryScope("admin", {
-      preferredValue: refs.threadCategory.value || adminCategories[0].id,
+      preferredValue: preferredAdminCategoryId,
     });
     refs.threadIsSticky.checked = true;
     return;
@@ -2414,8 +2901,13 @@ const onThreadStickyToggle = () => {
     return;
   }
 
+  const currentCategoryId = refs.threadCategory.value;
+  const preferredNormalCategoryId =
+    normalCategories.some((category) => category.id === currentCategoryId) ?
+      currentCategoryId
+    : normalCategories[0].id;
   setComposerCategoryScope("normal", {
-    preferredValue: refs.threadCategory.value || normalCategories[0].id,
+    preferredValue: preferredNormalCategoryId,
   });
 };
 
@@ -2486,7 +2978,28 @@ const syncEpisodeFilterToUrl = () => {
     url.searchParams.delete("episodeTitle");
   }
   url.searchParams.delete("new");
-  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  window.history.replaceState(
+    null,
+    "",
+    `${url.pathname}${url.search}${url.hash}`,
+  );
+};
+
+const scrollInitialEpisodeSectionIntoView = () => {
+  if (state.hasScrolledToInitialEpisodeSection) return;
+  if (!state.activeEpisodeId || !refs.episodeSection) return;
+  if (refs.episodeSection.hidden) return;
+
+  state.hasScrolledToInitialEpisodeSection = true;
+  window.requestAnimationFrame(() => {
+    refs.episodeSection.scrollIntoView({
+      behavior:
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches ?
+          "auto"
+        : "smooth",
+      block: "start",
+    });
+  });
 };
 
 const clearEpisodeFilter = async () => {
@@ -2584,7 +3097,7 @@ const initAuth = () => {
       "threads",
     );
 
-    state.composerCategoryScope = state.isAdmin ? "all" : "normal";
+    state.composerCategoryScope = "normal";
     setComposerCategoryScope(state.composerCategoryScope, {
       preferredValue: refs.threadCategory.value,
     });
@@ -2708,6 +3221,7 @@ const init = async () => {
   initAuth();
   initFeedInfiniteScroll();
   updateBackToTopVisibility();
+  const recentEpisodesPromise = loadRecentEpisodesPanel();
 
   window.addEventListener("pagehide", () => {
     clearFeedAutoCheckTimeout();
@@ -2724,12 +3238,14 @@ const init = async () => {
   }
 
   try {
-    await loadCategories();
+    await Promise.all([loadCategories(), recentEpisodesPromise]);
   } catch (error) {
     renderFeedStatus(
       describeError(error, "Nu am putut încărca categoriile forumului."),
     );
   }
+
+  hydrateActiveEpisodeTitleFromCatalog();
 
   renderCategoryChips();
   renderStickyCategoryChips();
@@ -2746,6 +3262,7 @@ const init = async () => {
     loadFeedPage({ reset: true }),
     loadEpisodeThreads(),
   ]);
+  scrollInitialEpisodeSectionIntoView();
   maybeAutoOpenThreadModal();
 };
 
