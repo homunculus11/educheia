@@ -204,12 +204,49 @@ h4 {
   @apply mt-[2px] truncate text-sm text-[#aebfd7];
 }
 
-.forum-sticky-new-count {
-  @apply inline-flex h-8 min-w-8 flex-shrink-0 items-center justify-center rounded-full border border-[#89d5df66] bg-[#203854a6] px-2 text-xs font-bold text-[#e4f8ff];
+.forum-sticky-summary-actions {
+  @apply flex flex-shrink-0 items-center self-stretch;
+}
+
+.forum-sticky-expand-hint {
+  @apply inline-flex items-center gap-2 rounded-[14px] border border-[#8aa4c430] bg-[#13233a78] px-3 py-2 text-[11px] font-semibold text-[#c5d5e9] transition-colors duration-200;
+}
+
+.forum-sticky-expand-copy {
+  @apply flex flex-col leading-tight;
+}
+
+.forum-sticky-expand-label-open {
+  display: none;
+}
+
+.forum-sticky-expand-icon {
+  @apply inline-flex items-center justify-center text-[#dff5ff] transition-transform duration-200;
+}
+
+.forum-sticky-expand-icon svg {
+  @apply h-4 w-4;
 }
 
 .forum-sticky-panel[open] .forum-sticky-summary {
   @apply mb-4;
+}
+
+.forum-sticky-summary:hover .forum-sticky-expand-hint {
+  background: rgba(22, 40, 66, 0.9);
+  border-color: rgba(155, 220, 228, 0.34);
+}
+
+.forum-sticky-panel[open] .forum-sticky-expand-label-closed {
+  display: none;
+}
+
+.forum-sticky-panel[open] .forum-sticky-expand-label-open {
+  display: block;
+}
+
+.forum-sticky-panel[open] .forum-sticky-expand-icon {
+  transform: rotate(180deg);
 }
 
 .forum-episode-kicker {
@@ -613,7 +650,7 @@ h4 {
 }
 
 .forum-recent-episode {
-  @apply grid min-w-0 items-center gap-2 rounded-[10px] border border-[#8aa4c42c] bg-[#17263f8f] px-2 py-2 no-underline transition-all duration-200;
+  @apply grid min-w-0 items-center gap-2 rounded-[10px] border border-[#8aa4c42c] bg-[#17263f8f] px-2 py-[10px] no-underline transition-all duration-200;
   grid-template-columns: 46px minmax(0, 1fr) 18px;
 }
 
@@ -631,19 +668,27 @@ h4 {
 }
 
 .forum-recent-episode-top {
-  @apply flex min-w-0 items-center gap-2;
+  @apply relative block min-w-0;
 }
 
 .forum-recent-episode-number {
-  @apply inline-flex h-5 flex-shrink-0 items-center rounded-full border border-[#74d3df4d] bg-[#16364ead] px-2 text-[10px] font-bold leading-none text-[#93e6f1];
+  @apply absolute left-0 top-0 inline-flex h-[18px] min-w-[44px] items-center justify-center rounded-full border border-[#74d3df4d] bg-[#16364ead] px-2 text-[10px] font-bold leading-none text-[#93e6f1];
 }
 
 .forum-recent-episode-title {
-  @apply min-w-0 truncate text-[12px] font-semibold leading-snug text-[#e7effc];
+  @apply min-w-0 pl-0 text-[12px] font-semibold leading-[18px] text-[#e7effc];
+  display: -webkit-box;
+  overflow: hidden;
+  max-height: 36px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-indent: 52px;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .forum-recent-episode-count {
-  @apply mt-[3px] text-[11px] leading-none text-[#9fb2cc];
+  @apply mt-[4px] text-[11px] leading-snug text-[#9fb2cc];
 }
 
 .forum-recent-episode-arrow {
@@ -655,7 +700,7 @@ h4 {
 }
 
 .forum-recent-episode-skeleton {
-  @apply h-[62px] rounded-[10px] border border-[#8aa4c42c] bg-[#17263f8f] relative overflow-hidden;
+  @apply relative h-[74px] overflow-hidden rounded-[10px] border border-[#8aa4c42c] bg-[#17263f8f];
 }
 
 .forum-recent-episode-skeleton::after {
@@ -1757,6 +1802,18 @@ body.modal-open {
 
   .forum-thread-stats {
     @apply justify-between;
+  }
+
+  .forum-sticky-summary {
+    @apply items-start;
+  }
+
+  .forum-sticky-summary-actions {
+    @apply w-full justify-end;
+  }
+
+  .forum-sticky-expand-hint {
+    @apply max-w-full;
   }
 }
 

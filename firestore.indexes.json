@@ -1,0 +1,203 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "forumCategories",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isArchived",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "forumThreads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isSticky",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoryType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "moderationStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastActivityAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "forumThreads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isSticky",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoryType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "moderationStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoryId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastActivityAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "forumThreads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isSticky",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoryType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "moderationStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "forumThreads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isSticky",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoryType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "moderationStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoryId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "forumThreads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isSticky",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoryType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "moderationStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "commentCount",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "lastActivityAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "forumThreads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isSticky",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoryType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "moderationStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoryId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "commentCount",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "lastActivityAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "forumThreads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "episodeId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "moderationStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastActivityAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "forumThreads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "moderationStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

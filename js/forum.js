@@ -19,12 +19,11 @@ import {
 
 const AUTH_RETURN_KEY = "authReturnTo";
 const PAGE_SIZE = 5;
+const FEED_QUERY_LIMIT = PAGE_SIZE + 1;
 const STICKY_LIMIT = 12;
 const RECENT_EPISODES_LIMIT = 3;
 const EPISODES_CACHE_KEY = "episodesCacheV1";
 const MAX_VISIBLE_CATEGORY_CHIPS = 6;
-const FEED_AUTOLOAD_MARGIN_PX = 240;
-const FEED_AUTOLOAD_DELAY_MS = 160;
 const MODAL_TRANSITION_MS = 220;
 const BACK_TO_TOP_FADE_MS = 180;
 const THREADS_COLLECTION = "forumThreads";
@@ -66,7 +65,6 @@ const state = {
   composerCategoryScope: "normal",
   feedCursor: null,
   feedLastBatchSize: 0,
-  feedAutoCheckTimeoutId: 0,
   hasMoreFeed: true,
   isLoadingFeed: false,
   isLoadingSticky: false,
@@ -110,7 +108,6 @@ const refs = {
 
   stickyLoading: document.getElementById("sticky-loading"),
   stickyPanel: document.getElementById("forum-sticky-panel"),
-  stickyNewCount: document.getElementById("forum-sticky-new-count"),
   stickyList: document.getElementById("sticky-list"),
   stickyEmpty: document.getElementById("sticky-empty"),
   stickyCategoryChips: document.getElementById("forum-sticky-category-chips"),
@@ -280,6 +277,7 @@ const extractInitials = (value) => {
 };
 
 const pluralizeReplies = (count) => (count === 1 ? "răspuns" : "răspunsuri");
+const pluralizeThreads = (count) => (count === 1 ? "subiect" : "subiecte");
 
 const formatRelativeTime = (rawDate) => {
   const date = toDateOrNull(rawDate);
@@ -727,7 +725,7 @@ const renderRecentEpisodesPanel = ({ isLoading = false } = {}) => {
 
     const count = document.createElement("span");
     count.className = "forum-recent-episode-count";
-    count.textContent = `${threadCount} ${pluralizeReplies(threadCount)}`;
+    count.textContent = `${threadCount} ${pluralizeThreads(threadCount)}`;
 
     copy.append(top, count);
 
@@ -1018,18 +1016,10 @@ const updateFeedInfiniteStatus = ({ hasError, visibleCount }) => {
   }
 
   if (state.hasMoreFeed) {
-    const shouldProbeForEnd =
-      state.feedLastBatchSize > 0 && state.feedLastBatchSize < PAGE_SIZE;
-
-    if (shouldProbeForEnd) {
-      refs.feedScrollStatus.textContent =
-        "Verificăm dacă mai există subiecte...";
-    } else {
-      refs.feedScrollStatus.textContent =
-        isSearchActive ?
-          "Continuă să derulezi pentru mai multe rezultate."
-        : "Derulează pentru a încărca mai multe subiecte.";
-    }
+    refs.feedScrollStatus.textContent =
+      isSearchActive ?
+        "Continuă să derulezi pentru mai multe rezultate."
+      : "Derulează pentru a încărca mai multe subiecte.";
     refs.feedSentinel.hidden = false;
     return;
   }
@@ -1039,38 +1029,10 @@ const updateFeedInfiniteStatus = ({ hasError, visibleCount }) => {
     hasLoadedSome ? "Ai ajuns la finalul subiectelor." : "";
 };
 
-const clearFeedAutoCheckTimeout = () => {
-  if (!state.feedAutoCheckTimeoutId) return;
-  window.clearTimeout(state.feedAutoCheckTimeoutId);
-  state.feedAutoCheckTimeoutId = 0;
-};
-
 const clearBackToTopHideTimeout = () => {
   if (!state.backToTopHideTimeoutId) return;
   window.clearTimeout(state.backToTopHideTimeoutId);
   state.backToTopHideTimeoutId = 0;
-};
-
-const isFeedSentinelInAutoloadRange = () => {
-  if (!refs.feedSentinel || refs.feedSentinel.hidden) return false;
-  const sentinelRect = refs.feedSentinel.getBoundingClientRect();
-  return sentinelRect.top <= window.innerHeight + FEED_AUTOLOAD_MARGIN_PX;
-};
-
-const scheduleFeedAutoCheck = () => {
-  clearFeedAutoCheckTimeout();
-
-  if (!state.hasMoreFeed || state.isLoadingFeed) return;
-  if (!refs.feedSentinel || refs.feedSentinel.hidden) return;
-
-  state.feedAutoCheckTimeoutId = window.setTimeout(async () => {
-    state.feedAutoCheckTimeoutId = 0;
-
-    if (!state.hasMoreFeed || state.isLoadingFeed) return;
-    if (!isFeedSentinelInAutoloadRange()) return;
-
-    await loadFeedPage({ reset: false });
-  }, FEED_AUTOLOAD_DELAY_MS);
 };
 
 const updateBackToTopVisibility = () => {
@@ -1300,13 +1262,6 @@ const renderStickySection = () => {
   const visibleSticky = applyStickyFilters(state.stickyThreads);
 
   refs.stickyLoading.hidden = !state.isLoadingSticky;
-  if (refs.stickyNewCount) {
-    refs.stickyNewCount.textContent = formatCappedCount(visibleSticky.length);
-    refs.stickyNewCount.setAttribute(
-      "aria-label",
-      `${visibleSticky.length} subiecte fixate disponibile`,
-    );
-  }
 
   if (
     !state.isLoadingSticky &&
@@ -1403,7 +1358,6 @@ const renderFeedSection = () => {
     visibleCount: visibleFeed.length,
   });
 
-  scheduleFeedAutoCheck();
   updateAuxPanels();
 };
 
@@ -1440,47 +1394,6 @@ const sortThreadsClientSide = (threads) => {
   return sorted;
 };
 
-const loadFeedPageFallback = async ({ requestId, reset }) => {
-  const threadsRef = collection(db, THREADS_COLLECTION);
-  const fallbackConstraints = [
-    where("isSticky", "==", false),
-    where("categoryType", "==", "normal"),
-    where("moderationStatus", "==", "visible"),
-  ];
-
-  if (state.activeCategory !== "all") {
-    fallbackConstraints.unshift(
-      where("categoryId", "==", state.activeCategory),
-    );
-  }
-
-  fallbackConstraints.push(limit(PAGE_SIZE * 12));
-
-  const snapshot = await getDocs(query(threadsRef, ...fallbackConstraints));
-  if (requestId !== state.feedRequestId) return false;
-
-  state.feedLastBatchSize = snapshot.docs.length;
-  const fetched = sortThreadsClientSide(snapshot.docs.map(mapThreadDoc));
-
-  if (reset) {
-    state.feedThreads = fetched;
-  } else {
-    const seen = new Set(state.feedThreads.map((thread) => thread.id));
-    fetched.forEach((thread) => {
-      if (!seen.has(thread.id)) {
-        state.feedThreads.push(thread);
-        seen.add(thread.id);
-      }
-    });
-  }
-  state.feedThreads = sortThreadsClientSide(state.feedThreads);
-
-  state.feedCursor = null;
-  state.hasMoreFeed = false;
-  hideFeedError();
-  return true;
-};
-
 const buildFeedConstraints = () => {
   const constraints = [where("isSticky", "==", false)];
   constraints.push(where("categoryType", "==", "normal"));
@@ -1497,7 +1410,7 @@ const buildFeedConstraints = () => {
     constraints.push(startAfter(state.feedCursor));
   }
 
-  constraints.push(limit(PAGE_SIZE));
+  constraints.push(limit(FEED_QUERY_LIMIT));
 
   return constraints;
 };
@@ -1681,7 +1594,6 @@ const loadFeedPage = async ({ reset = false } = {}) => {
   if (!reset && !state.hasMoreFeed) return;
 
   if (reset) {
-    clearFeedAutoCheckTimeout();
     state.feedThreads = [];
     state.feedCursor = null;
     state.feedLastBatchSize = 0;
@@ -1707,8 +1619,10 @@ const loadFeedPage = async ({ reset = false } = {}) => {
 
     if (requestId !== state.feedRequestId) return;
 
-    state.feedLastBatchSize = snapshot.docs.length;
-    const fetched = snapshot.docs.map(mapThreadDoc);
+    // Fetch one extra document so we can tell whether another page exists.
+    const pageDocs = snapshot.docs.slice(0, PAGE_SIZE);
+    state.feedLastBatchSize = pageDocs.length;
+    const fetched = pageDocs.map(mapThreadDoc);
 
     if (reset) {
       state.feedThreads = fetched;
@@ -1723,33 +1637,22 @@ const loadFeedPage = async ({ reset = false } = {}) => {
     }
     state.feedThreads = sortThreadsClientSide(state.feedThreads);
 
-    if (snapshot.docs.length) {
-      state.feedCursor = snapshot.docs[snapshot.docs.length - 1];
-    }
-
-    state.hasMoreFeed = snapshot.docs.length > 0;
+    state.feedCursor =
+      pageDocs.length ? pageDocs[pageDocs.length - 1] : state.feedCursor;
+    state.hasMoreFeed = snapshot.docs.length > PAGE_SIZE;
     hideFeedError();
   } catch (error) {
     if (requestId !== state.feedRequestId) return;
-    let recovered = false;
 
-    try {
-      recovered = await loadFeedPageFallback({ requestId, reset });
-    } catch {
-      recovered = false;
-    }
+    state.hasMoreFeed = false;
+    state.feedLastBatchSize = 0;
+    const readableError = describeError(error);
 
-    if (!recovered) {
-      state.hasMoreFeed = false;
-      state.feedLastBatchSize = 0;
-      const readableError = describeError(error);
-
-      if (state.feedThreads.length > 0) {
-        hideFeedError();
-        renderFeedStatus(readableError);
-      } else {
-        showFeedError(readableError);
-      }
+    if (state.feedThreads.length > 0) {
+      hideFeedError();
+      renderFeedStatus(readableError);
+    } else {
+      showFeedError(readableError);
     }
   } finally {
     if (requestId === state.feedRequestId) {
@@ -3224,7 +3127,6 @@ const init = async () => {
   const recentEpisodesPromise = loadRecentEpisodesPanel();
 
   window.addEventListener("pagehide", () => {
-    clearFeedAutoCheckTimeout();
     clearModalCloseTimeout();
     clearBackToTopHideTimeout();
     window.clearTimeout(state.searchDebounceId);
